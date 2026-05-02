@@ -1,0 +1,20 @@
+{
+  "name": "suno-caption-studio",
+  "version": "1.0.0",
+  "description": "A standalone Chrome extension for previewing, saving, and copying Suno synchronized captions.",
+  "private": true,
+  "scripts": {
+    "validate": "node scripts/validate.js",
+    "icons": "node scripts/generate-icons.js",
+    "pack": "node scripts/package.js"
+  },
+  "keywords": [
+    "chrome-extension",
+    "suno",
+    "captions",
+    "lyrics",
+    "lrc",
+    "srt"
+  ],
+  "license": "MIT"
+}

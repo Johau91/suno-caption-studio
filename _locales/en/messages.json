@@ -1,0 +1,14 @@
+{
+  "extension_name": {
+    "message": "Suno Caption Studio",
+    "description": "Extension name"
+  },
+  "extension_short_name": {
+    "message": "Caption Studio",
+    "description": "Short extension name"
+  },
+  "extension_description": {
+    "message": "Preview synchronized lyrics on Suno song pages, then save or copy them as LRC, SRT, or TXT.",
+    "description": "Extension description"
+  }
+}

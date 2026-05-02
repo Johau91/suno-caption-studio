@@ -1,0 +1,14 @@
+{
+  "extension_name": {
+    "message": "Suno Caption Studio",
+    "description": "확장 프로그램 이름"
+  },
+  "extension_short_name": {
+    "message": "Caption Studio",
+    "description": "짧은 확장 프로그램 이름"
+  },
+  "extension_description": {
+    "message": "Suno 곡 페이지에서 동기화된 가사를 미리보고 LRC, SRT, TXT로 저장하거나 복사합니다.",
+    "description": "확장 프로그램 설명"
+  }
+}
