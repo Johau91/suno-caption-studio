@@ -4,12 +4,16 @@ const { execFileSync } = require('child_process');
 
 const root = path.resolve(__dirname, '..');
 const dist = path.join(root, 'dist');
+const unpacked = path.join(dist, 'unpacked');
 const zipPath = path.join(dist, 'suno-caption-studio.zip');
 const include = [
   'manifest.json',
   'background.js',
   'content.js',
   'styles.css',
+  'popup.html',
+  'popup.css',
+  'popup.js',
   '_locales/en/messages.json',
   '_locales/ko/messages.json',
   'icons/icon16.png',
@@ -35,6 +39,13 @@ const files = include.map((name) => ({
   data: fs.readFileSync(path.join(root, name))
 }));
 
+for (const file of files) {
+  const destination = path.join(unpacked, file.name);
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  fs.writeFileSync(destination, file.data);
+}
+
+console.log(`Created ${path.relative(root, unpacked)}`);
 fs.writeFileSync(zipPath, createZip(files));
 console.log(`Created ${path.relative(root, zipPath)}`);
 

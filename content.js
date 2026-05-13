@@ -11,45 +11,46 @@
       format: 'lrc',
       fileName: 'title-song',
       includeMeta: true,
-      autoOpen: true
+      cleanMode: 'strong',
+      autoOpen: false
     }
   };
 
   let root;
+  let downloadGroup;
   let els = {};
   let routeTimer = 0;
+  let thumbnailTimer = 0;
+  let pageObserver;
 
   init();
 
   chrome.runtime.onMessage.addListener((message) => {
-    if (message?.type === 'caption-studio:toggle') {
-      setOpen(!state.open);
-      if (state.open) {
-        refreshCaptions();
-      }
-    }
-
     if (message?.type === 'caption-studio:navigation') {
       window.clearTimeout(routeTimer);
       routeTimer = window.setTimeout(() => {
         resetForRoute();
-        if (state.settings.autoOpen && getSongIdFromLocation()) {
-          setOpen(true);
-          refreshCaptions();
-        }
+        scheduleThumbnailPlacement();
       }, 450);
     }
+  });
+
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local' || !changes[STORAGE_KEY]?.newValue) {
+      return;
+    }
+
+    state.settings = { ...state.settings, ...changes[STORAGE_KEY].newValue };
+    renderSettings();
+    scheduleThumbnailPlacement();
   });
 
   async function init() {
     state.settings = { ...state.settings, ...(await readSettings()) };
     mount();
     resetForRoute();
-
-    if (state.settings.autoOpen && getSongIdFromLocation()) {
-      setOpen(true);
-      refreshCaptions();
-    }
+    observePage();
+    scheduleThumbnailPlacement();
   }
 
   function mount() {
@@ -61,29 +62,32 @@
     root.id = 'suno-caption-studio-root';
     root.className = 'scs-root';
     root.innerHTML = `
-      <button class="scs-launcher" type="button" aria-label="Suno Caption Studio 열기">
-        <span class="scs-dot"></span>
-        <span>Caption Studio</span>
-      </button>
       <section class="scs-panel" aria-label="Suno Caption Studio">
         <header class="scs-header">
           <div class="scs-title">
-            <strong>Caption Studio</strong>
-            <span data-role="subtitle">Suno 곡 캡션 내보내기</span>
+            <strong>캡션 저장 설정</strong>
+            <span data-role="subtitle">확장 프로그램 아이콘으로 열고 닫기</span>
           </div>
           <button class="scs-icon-button" type="button" data-action="close" aria-label="닫기">×</button>
         </header>
         <div class="scs-body">
           <div class="scs-status" data-role="status">곡 페이지에서 캡션을 불러올 수 있습니다.</div>
-          <div class="scs-options">
-            <div class="scs-field">
-              <label for="scs-format">미리보기 형식</label>
+          <div class="scs-main">
+            <div class="scs-field scs-format">
+              <label for="scs-format">형식</label>
               <select id="scs-format" class="scs-select" data-setting="format">
                 <option value="lrc">LRC</option>
                 <option value="srt">SRT</option>
                 <option value="txt">TXT</option>
               </select>
             </div>
+            <button class="scs-button" type="button" data-action="save-selected">저장</button>
+            <button class="scs-button" type="button" data-kind="secondary" data-action="copy-selected">복사</button>
+          </div>
+          <button class="scs-button scs-wide-button" type="button" data-kind="secondary" data-action="save-all">LRC/SRT/TXT 저장</button>
+          <details class="scs-details">
+            <summary>옵션</summary>
+            <div class="scs-options">
             <div class="scs-field">
               <label for="scs-filename">파일명</label>
               <select id="scs-filename" class="scs-select" data-setting="fileName">
@@ -96,34 +100,44 @@
               <input type="checkbox" data-setting="includeMeta">
               <span>LRC/TXT에 제목과 곡 ID 포함</span>
             </label>
-            <label class="scs-check">
-              <input type="checkbox" data-setting="autoOpen">
-              <span>곡 페이지에서 자동으로 열기</span>
-            </label>
+            <button class="scs-button scs-wide-button" type="button" data-kind="secondary" data-action="refresh">다시 불러오기</button>
           </div>
-          <div class="scs-grid">
-            <button class="scs-button" type="button" data-action="save-selected">선택 형식 저장</button>
-            <button class="scs-button" type="button" data-action="copy-selected">선택 형식 복사</button>
-            <button class="scs-button" type="button" data-action="save-all">LRC/SRT/TXT 저장</button>
-            <button class="scs-button" type="button" data-kind="secondary" data-action="refresh">다시 불러오기</button>
-          </div>
+          </details>
           <div class="scs-empty">
             현재 페이지에서 동기화된 캡션을 찾지 못했습니다. Suno에 로그인되어 있는지 확인하고 곡 상세 페이지에서 다시 시도하세요.
           </div>
-          <div class="scs-preview">
-            <div class="scs-preview-head">
+          <details class="scs-preview">
+            <summary class="scs-preview-head">
               <span data-role="summary">대기 중</span>
               <span data-role="file">파일명 미리보기</span>
-            </div>
+            </summary>
             <pre data-role="preview"></pre>
-          </div>
+          </details>
         </div>
       </section>
     `;
 
     document.documentElement.appendChild(root);
+    downloadGroup = document.createElement('div');
+    downloadGroup.className = 'scs-download-group';
+    downloadGroup.hidden = true;
+    downloadGroup.innerHTML = `
+      <button class="scs-format-download" type="button" data-format="lrc" aria-label="LRC 다운로드">LRC</button>
+      <button class="scs-format-download" type="button" data-format="srt" aria-label="SRT 다운로드">SRT</button>
+      <button class="scs-format-download" type="button" data-format="txt" aria-label="TXT 다운로드">TXT</button>
+    `;
+    downloadGroup.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-format]');
+      if (!button) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      downloadFromThumbnail(button.dataset.format);
+    });
+    document.body.appendChild(downloadGroup);
+
     els = {
-      launcher: root.querySelector('.scs-launcher'),
       status: root.querySelector('[data-role="status"]'),
       subtitle: root.querySelector('[data-role="subtitle"]'),
       summary: root.querySelector('[data-role="summary"]'),
@@ -132,14 +146,8 @@
       buttons: [...root.querySelectorAll('[data-action]')],
       format: root.querySelector('[data-setting="format"]'),
       fileName: root.querySelector('[data-setting="fileName"]'),
-      includeMeta: root.querySelector('[data-setting="includeMeta"]'),
-      autoOpen: root.querySelector('[data-setting="autoOpen"]')
+      includeMeta: root.querySelector('[data-setting="includeMeta"]')
     };
-
-    els.launcher.addEventListener('click', () => {
-      setOpen(true);
-      refreshCaptions();
-    });
 
     root.addEventListener('click', (event) => {
       const action = event.target.closest('[data-action]')?.dataset.action;
@@ -167,6 +175,296 @@
     render();
   }
 
+  function observePage() {
+    if (pageObserver || !document.body) {
+      return;
+    }
+
+    pageObserver = new MutationObserver(scheduleThumbnailPlacement);
+    pageObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['src', 'style', 'class']
+    });
+    window.addEventListener('resize', scheduleThumbnailPlacement, { passive: true });
+    window.addEventListener('scroll', scheduleThumbnailPlacement, { passive: true });
+  }
+
+  function scheduleThumbnailPlacement() {
+    window.clearTimeout(thumbnailTimer);
+    thumbnailTimer = window.setTimeout(placeThumbnailButton, 120);
+  }
+
+  function placeThumbnailButton() {
+    if (!downloadGroup) {
+      return;
+    }
+
+    const songId = getSongIdFromLocation();
+    const anchor = songId ? findLyricsAnchor() : null;
+    if (!anchor?.parentElement) {
+      downloadGroup.hidden = true;
+      return;
+    }
+
+    if (downloadGroup.parentElement !== anchor.parentElement || downloadGroup.nextElementSibling !== anchor) {
+      anchor.parentElement.insertBefore(downloadGroup, anchor);
+    }
+
+    downloadGroup.hidden = false;
+    downloadGroup.dataset.busy = String(state.busy);
+    for (const button of downloadGroup.querySelectorAll('button')) {
+      button.disabled = state.busy;
+    }
+  }
+
+  function findLyricsAnchor() {
+    const heading = findSongHeading();
+    const scope = document.querySelector('main') || document.body;
+    const candidates = [...scope.querySelectorAll('*')]
+      .map((node) => {
+        if (node.closest('#suno-caption-studio-root, .scs-download-group')) {
+          return null;
+        }
+        if (node.matches('button, a, input, textarea, select, svg, path')) {
+          return null;
+        }
+
+        const text = normalizeText(node.textContent);
+        if (!text || !/\[[^\]]+\]/.test(text)) {
+          return null;
+        }
+
+        const rect = node.getBoundingClientRect();
+        const style = window.getComputedStyle(node);
+        const visible = style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          rect.width >= 80 &&
+          rect.height >= 12 &&
+          rect.left < window.innerWidth * 0.72 &&
+          (!heading || rect.top > heading.rect.bottom);
+
+        if (!visible) {
+          return null;
+        }
+
+        const lineCount = text.split('\n').filter(Boolean).length;
+        const area = rect.width * rect.height;
+        const sectionStart = /^\[[^\]]+\]/.test(text) ? 100000 : 0;
+        return {
+          node: findBlockAnchor(node),
+          score: sectionStart - area + lineCount * 2000 - rect.top
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.score - a.score);
+
+    return candidates[0]?.node || null;
+  }
+
+  function findBlockAnchor(node) {
+    let current = node;
+    for (let depth = 0; current?.parentElement && depth < 5; depth += 1) {
+      const display = window.getComputedStyle(current).display;
+      if (display !== 'inline' && display !== 'contents') {
+        return current;
+      }
+      current = current.parentElement;
+    }
+    return current || node;
+  }
+
+  function findSongActionRowRect() {
+    const heading = findSongHeading();
+    if (!heading) {
+      return null;
+    }
+
+    const buttons = [...document.querySelectorAll('button, [role="button"]')]
+      .map((button) => {
+        if (button.closest('#suno-caption-studio-root, .scs-download-group')) {
+          return null;
+        }
+
+        const rect = button.getBoundingClientRect();
+        const style = window.getComputedStyle(button);
+        const visible = style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          rect.width >= 20 &&
+          rect.width <= 58 &&
+          rect.height >= 20 &&
+          rect.height <= 58 &&
+          rect.left > heading.rect.left - 24 &&
+          rect.left < window.innerWidth * 0.78 &&
+          rect.top > heading.rect.bottom + 30 &&
+          rect.top < heading.rect.bottom + 190;
+
+        return visible ? { rect: freezeRect(rect) } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.rect.top - b.rect.top || a.rect.left - b.rect.left);
+
+    const rows = [];
+    for (const button of buttons) {
+      const row = rows.find((item) => Math.abs(item.top - button.rect.top) <= 8);
+      if (row) {
+        row.items.push(button.rect);
+        row.top = Math.min(row.top, button.rect.top);
+      } else {
+        rows.push({ top: button.rect.top, items: [button.rect] });
+      }
+    }
+
+    const row = rows
+      .filter((item) => item.items.length >= 3)
+      .sort((a, b) => a.top - b.top)[0];
+
+    if (!row) {
+      return null;
+    }
+
+    const left = Math.min(...row.items.map((item) => item.left));
+    const right = Math.max(...row.items.map((item) => item.right));
+    const top = Math.min(...row.items.map((item) => item.top));
+    const bottom = Math.max(...row.items.map((item) => item.bottom));
+    return {
+      left,
+      right,
+      top,
+      bottom,
+      width: right - left,
+      height: bottom - top
+    };
+  }
+
+  function findSongThumbnailRect() {
+    const candidates = [];
+
+    for (const image of document.images) {
+      addThumbnailCandidate(candidates, image, 20000);
+    }
+
+    for (const node of document.querySelectorAll('[style*="background-image"]')) {
+      addThumbnailCandidate(candidates, node, 15000);
+    }
+
+    for (const node of document.querySelectorAll('button, a, div, span')) {
+      const label = normalizeText(`${node.textContent || ''} ${node.getAttribute('aria-label') || ''} ${node.title || ''}`);
+      if (!/(^|\s)(Edit|편집)(\s|$)/.test(label)) {
+        continue;
+      }
+      let parent = node.parentElement;
+      for (let depth = 0; parent && depth < 7; depth += 1) {
+        addThumbnailCandidate(candidates, parent, 25000 - depth * 700);
+        parent = parent.parentElement;
+      }
+    }
+
+    for (const node of document.querySelectorAll('main *')) {
+      addThumbnailCandidate(candidates, node, -12000);
+    }
+
+    candidates.sort((a, b) => b.score - a.score);
+    return candidates[0]?.rect || fallbackThumbnailRect() || fixedThumbnailRect();
+  }
+
+  function addThumbnailCandidate(candidates, node, bonus) {
+    if (!node || node.closest('#suno-caption-studio-root')) {
+      return;
+    }
+
+    const rect = node.getBoundingClientRect();
+    const style = window.getComputedStyle(node);
+    const width = rect.width;
+    const height = rect.height;
+    const aspect = width / Math.max(1, height);
+    const visible = style.display !== 'none' &&
+      style.visibility !== 'hidden' &&
+      style.opacity !== '0' &&
+      width >= 96 &&
+      height >= 96 &&
+      width <= 360 &&
+      height <= 360 &&
+      aspect >= 0.72 &&
+      aspect <= 1.38 &&
+      rect.right > 0 &&
+      rect.left < window.innerWidth * 0.55 &&
+      rect.bottom > 0 &&
+      rect.top < window.innerHeight * 0.72;
+
+    if (!visible) {
+      return;
+    }
+
+    const leftScore = Math.max(0, window.innerWidth * 0.42 - rect.left) * 80;
+    const topScore = Math.max(0, window.innerHeight * 0.48 - rect.top) * 36;
+    candidates.push({
+      rect: freezeRect(rect),
+      score: width * height + leftScore + topScore + bonus - Math.abs(width - height) * 140
+    });
+  }
+
+  function fallbackThumbnailRect() {
+    const heading = findSongHeading();
+
+    if (!heading) {
+      return null;
+    }
+
+    const size = 154;
+    const left = Math.max(72, heading.rect.left - size - 18);
+    const top = Math.max(72, heading.rect.top - 10);
+    return {
+      left,
+      top,
+      right: left + size,
+      bottom: top + size,
+      width: size,
+      height: size
+    };
+  }
+
+  function findSongHeading() {
+    return [...document.querySelectorAll('h1, [role="heading"]')]
+      .map((node) => ({
+        node,
+        rect: freezeRect(node.getBoundingClientRect()),
+        text: normalizeText(node.textContent)
+      }))
+      .find((item) => item.text &&
+        item.rect.left > 120 &&
+        item.rect.top > 20 &&
+        item.rect.top < window.innerHeight * 0.4 &&
+        item.rect.width > 120) || null;
+  }
+
+  function fixedThumbnailRect() {
+    const sidebar = window.innerWidth < 700 ? 16 : 64;
+    const size = window.innerWidth < 700 ? 128 : 156;
+    const left = Math.min(Math.max(sidebar + 10, 54), Math.max(54, window.innerWidth - size - 24));
+    const top = window.innerWidth < 700 ? 84 : 28;
+    return {
+      left,
+      top,
+      right: left + size,
+      bottom: top + size,
+      width: size,
+      height: size
+    };
+  }
+
+  function freezeRect(rect) {
+    return {
+      left: rect.left,
+      top: rect.top,
+      right: rect.right,
+      bottom: rect.bottom,
+      width: rect.width,
+      height: rect.height
+    };
+  }
+
   function handleAction(action) {
     if (action === 'close') {
       setOpen(false);
@@ -186,6 +484,26 @@
     }
     if (action === 'save-all') {
       ['lrc', 'srt', 'txt'].forEach((format) => saveFormat(format));
+    }
+  }
+
+  async function downloadFromThumbnail(format) {
+    if (state.busy) {
+      return;
+    }
+
+    const songId = getSongIdFromLocation();
+    if (!songId) {
+      setStatus('Suno 곡 상세 페이지에서 사용할 수 있습니다.', 'error');
+      return;
+    }
+
+    if (state.songId !== songId || !state.lines.length) {
+      await refreshCaptions();
+    }
+
+    if (state.lines.length) {
+      saveFormat(format);
     }
   }
 
@@ -445,13 +763,15 @@
   }
 
   function renderExport(format) {
+    const cleanMode = getCleanMode();
+    const lines = cleanMode === 'none' ? state.lines : cleanExportLines(state.lines, cleanMode);
     if (format === 'srt') {
-      return toSrt(state.lines);
+      return toSrt(lines);
     }
     if (format === 'txt') {
-      return toTxt(state.lines, state.settings.includeMeta);
+      return toTxt(lines, state.settings.includeMeta);
     }
-    return toLrc(state.lines, state.settings.includeMeta);
+    return toLrc(lines, state.settings.includeMeta);
   }
 
   function toLrc(lines, includeMeta) {
@@ -468,10 +788,82 @@
   }
 
   function toTxt(lines, includeMeta) {
-    const meta = includeMeta
+    const output = includeMeta
       ? [`Title: ${state.title || state.songId}`, `Song ID: ${state.songId}`, `Exported by: Suno Caption Studio`, '']
       : [];
-    return meta.concat(lines.map((line) => line.text)).join('\n');
+
+    lines.forEach((line, index) => {
+      const previous = lines[index - 1];
+      const longPause = previous &&
+        isNumber(line.start) &&
+        isNumber(previous.end) &&
+        line.start - previous.end >= 1.35;
+
+      if (longPause && output.length && output[output.length - 1] !== '') {
+        output.push('');
+      }
+
+      output.push(line.text);
+    });
+
+    return collapseBlankLines(output).join('\n');
+  }
+
+  function cleanExportLines(lines, mode) {
+    return lines
+      .map((line) => ({
+        ...line,
+        text: cleanExportText(line.text, mode)
+      }))
+      .filter((line) => line.text);
+  }
+
+  function cleanExportText(text, mode) {
+    const normalized = normalizeText(text);
+    if (isSectionLabel(normalized)) {
+      return '';
+    }
+
+    const withoutTags = mode === 'strong'
+      ? normalized.replace(/\[[^\]]+\]/g, ' ')
+      : normalized;
+
+    return withoutTags
+      .replace(/[~～]+/g, '')
+      .replace(/\s*\/+\s*/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  }
+
+  function getCleanMode() {
+    if (['none', 'basic', 'strong'].includes(state.settings.cleanMode)) {
+      return state.settings.cleanMode;
+    }
+    if (state.settings.cleanMarkers === false) {
+      return 'none';
+    }
+    return 'strong';
+  }
+
+  function isSectionLabel(text) {
+    return /^\[[^\]]+\]$/.test(normalizeText(text));
+  }
+
+  function collapseBlankLines(lines) {
+    const output = [];
+    for (const line of lines) {
+      if (line === '' && output[output.length - 1] === '') {
+        continue;
+      }
+      output.push(line);
+    }
+    while (output[0] === '') {
+      output.shift();
+    }
+    while (output[output.length - 1] === '') {
+      output.pop();
+    }
+    return output;
   }
 
   function render() {
@@ -492,6 +884,7 @@
     }
 
     renderSettings();
+    scheduleThumbnailPlacement();
   }
 
   function renderSettings() {
@@ -501,7 +894,6 @@
     els.format.value = state.settings.format;
     els.fileName.value = state.settings.fileName;
     els.includeMeta.checked = Boolean(state.settings.includeMeta);
-    els.autoOpen.checked = Boolean(state.settings.autoOpen);
   }
 
   function setStatus(message, tone) {

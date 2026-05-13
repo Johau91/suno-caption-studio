@@ -1,15 +1,3 @@
-chrome.action.onClicked.addListener(async (tab) => {
-  if (!tab.id || !tab.url || !tab.url.startsWith('https://suno.com/')) {
-    return;
-  }
-
-  try {
-    await chrome.tabs.sendMessage(tab.id, { type: 'caption-studio:toggle' });
-  } catch (error) {
-    console.debug('[Suno Caption Studio] content script is not ready', error);
-  }
-});
-
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (!changeInfo.url || !changeInfo.url.startsWith('https://suno.com/')) {
     return;

@@ -20,7 +20,8 @@
     "https://studio-api.prod.suno.com/*"
   ],
   "action": {
-    "default_title": "__MSG_extension_name__"
+    "default_title": "__MSG_extension_name__",
+    "default_popup": "popup.html"
   },
   "background": {
     "service_worker": "background.js"
