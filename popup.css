@@ -8,7 +8,7 @@
 }
 
 body {
-  width: 312px;
+  width: 520px;
   margin: 0;
   background: #ffffff;
   color: #111827;
@@ -92,13 +92,13 @@ select {
 
 .tool-links {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
 .tool-links button {
   width: 100%;
-  min-height: 58px;
+  min-height: 72px;
   display: grid;
   grid-template-columns: 34px 1fr;
   align-items: center;
@@ -126,6 +126,16 @@ select {
   line-height: 1;
 }
 
+.tool-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .tool-icon-ieumpli {
   background: linear-gradient(135deg, #f97316, #ec4899);
 }
@@ -150,6 +160,10 @@ select {
   font-size: 12px;
 }
 
+.tool-icon-contact {
+  background: linear-gradient(135deg, #0f172a, #475569);
+}
+
 .tool-copy {
   min-width: 0;
   display: block;
@@ -172,12 +186,15 @@ select {
 }
 
 .tool-copy > span {
-  display: block;
   margin-top: 4px;
   color: #64748b;
   font-size: 11px;
   font-weight: 500;
   line-height: 1.35;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .tool-links button:hover,
