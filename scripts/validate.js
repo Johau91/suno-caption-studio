@@ -15,7 +15,13 @@ const required = [
   'icons/icon16.png',
   'icons/icon32.png',
   'icons/icon48.png',
-  'icons/icon128.png'
+  'icons/icon128.png',
+  'icons/lucide/bot.svg',
+  'icons/lucide/message-circle.svg',
+  'icons/lucide/messages-square.svg',
+  'icons/lucide/music-2.svg',
+  'icons/lucide/user-round-check.svg',
+  'icons/lucide/video.svg'
 ];
 
 for (const file of required) {
