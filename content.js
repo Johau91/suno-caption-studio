@@ -1,5 +1,6 @@
 (() => {
   const STORAGE_KEY = 'sunoCaptionStudio.settings';
+  const STATS_KEY = 'sunoCaptionStudio.stats';
   const FALLBACK_DURATION = 2.4;
   const state = {
     open: false,
@@ -10,6 +11,7 @@
     settings: {
       format: 'lrc',
       fileName: 'title-song',
+      customPattern: '{title}-{songId}',
       includeMeta: true,
       cleanMode: 'strong',
       autoOpen: false
@@ -32,6 +34,10 @@
         resetForRoute();
         scheduleThumbnailPlacement();
       }, 450);
+      return;
+    }
+    if (message?.type === 'caption-studio:shortcut-download') {
+      downloadFromThumbnail(state.settings.format);
     }
   });
 
@@ -747,6 +753,22 @@
     }
     downloadText(renderExport(format), makeFileName(format), mimeFor(format));
     setStatus(`${format.toUpperCase()} 파일을 저장했습니다.`, 'ok');
+    incrementDownloadCount();
+  }
+
+  async function incrementDownloadCount() {
+    try {
+      const result = await chrome.storage.local.get(STATS_KEY);
+      const current = Number(result?.[STATS_KEY]?.downloadCount ?? 0);
+      await chrome.storage.local.set({
+        [STATS_KEY]: {
+          downloadCount: current + 1,
+          lastDownloadAt: Date.now()
+        }
+      });
+    } catch {
+      // Stats are best-effort; don't surface errors to the user.
+    }
   }
 
   async function copyFormat(format) {
@@ -1049,12 +1071,30 @@
   function makeFileName(format) {
     const title = slugify(state.title || 'suno-caption');
     const song = slugify(state.songId || 'song');
-    const base = state.settings.fileName === 'title'
-      ? title
-      : state.settings.fileName === 'song'
-        ? song
-        : `${title}-${song}`;
+    let base;
+    if (state.settings.fileName === 'custom') {
+      base = renderCustomPattern(state.settings.customPattern, title, song);
+    } else if (state.settings.fileName === 'title') {
+      base = title;
+    } else if (state.settings.fileName === 'song') {
+      base = song;
+    } else {
+      base = `${title}-${song}`;
+    }
     return `${base}.${format}`;
+  }
+
+  function renderCustomPattern(pattern, title, song) {
+    const now = new Date();
+    const date = `${now.getFullYear()}${pad(now.getMonth() + 1, 2)}${pad(now.getDate(), 2)}`;
+    const time = `${pad(now.getHours(), 2)}${pad(now.getMinutes(), 2)}`;
+    const replaced = (pattern || '{title}-{songId}')
+      .replace(/\{title\}/gi, title)
+      .replace(/\{songId\}/gi, song)
+      .replace(/\{date\}/gi, date)
+      .replace(/\{time\}/gi, time);
+    const cleaned = slugify(replaced);
+    return cleaned || `${title}-${song}`;
   }
 
   function slugify(value) {

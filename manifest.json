@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "__MSG_extension_name__",
   "short_name": "__MSG_extension_short_name__",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "__MSG_extension_description__",
   "default_locale": "ko",
   "minimum_chrome_version": "114",
@@ -25,6 +25,15 @@
   },
   "background": {
     "service_worker": "background.js"
+  },
+  "commands": {
+    "download-current": {
+      "suggested_key": {
+        "default": "Alt+Shift+L",
+        "mac": "Alt+Shift+L"
+      },
+      "description": "현재 Suno 곡의 가사를 기본 형식으로 다운로드"
+    }
   },
   "content_scripts": [
     {

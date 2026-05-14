@@ -1,3 +1,72 @@
+const UPDATE_INFO_KEY = 'sunoCaptionStudio.updateInfo';
+const BADGE_TEXT = 'NEW';
+const BADGE_COLOR = '#1d4ed8';
+
+chrome.runtime.onInstalled.addListener(async (details) => {
+  if (details.reason !== 'update') {
+    return;
+  }
+  const currentVersion = chrome.runtime.getManifest().version;
+  if (details.previousVersion === currentVersion) {
+    return;
+  }
+  await chrome.storage.local.set({
+    [UPDATE_INFO_KEY]: {
+      version: currentVersion,
+      previousVersion: details.previousVersion || null,
+      shownAt: Date.now()
+    }
+  });
+  await setUpdateBadge();
+});
+
+chrome.runtime.onStartup.addListener(restorePendingBadge);
+restorePendingBadge();
+
+async function restorePendingBadge() {
+  try {
+    const result = await chrome.storage.local.get(UPDATE_INFO_KEY);
+    if (result[UPDATE_INFO_KEY]) {
+      await setUpdateBadge();
+    }
+  } catch (error) {
+    // Badge restore is best-effort.
+  }
+}
+
+async function setUpdateBadge() {
+  try {
+    await chrome.action.setBadgeText({ text: BADGE_TEXT });
+    await chrome.action.setBadgeBackgroundColor({ color: BADGE_COLOR });
+    if (chrome.action.setBadgeTextColor) {
+      await chrome.action.setBadgeTextColor({ color: '#ffffff' });
+    }
+  } catch (error) {
+    // Older Chrome versions may not support every badge API.
+  }
+}
+
+if (chrome.commands?.onCommand) {
+  chrome.commands.onCommand.addListener(async (command) => {
+    if (command !== 'download-current') {
+      return;
+    }
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id || !tab.url?.startsWith('https://suno.com/')) {
+        return;
+      }
+      await chrome.tabs.sendMessage(tab.id, {
+        type: 'caption-studio:shortcut-download'
+      }).catch(() => {
+        // Content script may not be ready; ignore.
+      });
+    } catch (error) {
+      // Best effort — shortcut shouldn't surface errors.
+    }
+  });
+}
+
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (!changeInfo.url || !changeInfo.url.startsWith('https://suno.com/')) {
     return;

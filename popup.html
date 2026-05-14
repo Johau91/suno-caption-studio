@@ -10,16 +10,46 @@
     <main class="popup">
       <header class="popup-header">
         <div>
-          <strong>가사 다운로드 설정</strong>
-          <span>썸네일 다운로드 버튼 기본값</span>
+          <strong data-i18n="header.title">가사 다운로드 설정</strong>
+          <span data-i18n="header.subtitle">썸네일 다운로드 버튼 기본값</span>
         </div>
-        <span class="save-badge">자동 저장</span>
+        <div class="popup-header-actions">
+          <button type="button" class="header-pill header-pill-primary" data-action="open-suno" data-i18n="header.openSuno" data-i18n-attr="title" title="Suno 열기">
+            Suno 열기 ↗
+          </button>
+          <div class="prefs-wrap">
+            <button type="button" class="header-icon-btn" data-action="toggle-prefs" aria-haspopup="true" aria-expanded="false" aria-controls="prefs-popover" data-i18n="prefs.label" data-i18n-attr="aria-label" aria-label="환경설정" title="환경설정">
+              <span class="header-icon header-icon-settings" aria-hidden="true"></span>
+            </button>
+            <div class="prefs-popover" id="prefs-popover" data-role="prefs-popover" role="dialog" aria-label="환경설정" hidden>
+              <div class="prefs-block">
+                <span class="prefs-label" data-i18n="prefs.language">언어 / Language</span>
+                <div class="lang-toggle" role="group" aria-label="Language">
+                  <button type="button" data-lang="ko" aria-pressed="true">KO</button>
+                  <button type="button" data-lang="en" aria-pressed="false">EN</button>
+                  <button type="button" data-lang="ja" aria-pressed="false">JA</button>
+                  <button type="button" data-lang="zh" aria-pressed="false">ZH</button>
+                  <button type="button" data-lang="es" aria-pressed="false">ES</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </header>
+
+      <aside class="update-banner" data-role="update-banner" hidden>
+        <span class="update-banner-icon" aria-hidden="true">✨</span>
+        <div class="update-banner-text">
+          <strong data-i18n="update.title">새 버전으로 업데이트되었습니다</strong>
+          <span data-role="update-version"></span>
+        </div>
+        <button type="button" class="update-banner-dismiss" data-role="update-dismiss" data-i18n="update.dismiss">확인</button>
+      </aside>
 
       <section class="settings-panel" aria-label="가사 다운로드 설정">
         <div class="settings-grid">
           <label class="field">
-            <span>다운로드 형식</span>
+            <span data-i18n="field.format">다운로드 형식</span>
             <select data-setting="format">
               <option value="lrc">LRC</option>
               <option value="srt">SRT</option>
@@ -28,20 +58,26 @@
           </label>
 
           <label class="field">
-            <span>파일명</span>
+            <span data-i18n="field.fileName">파일명</span>
             <select data-setting="fileName">
-              <option value="title-song">제목 + 곡 ID</option>
-              <option value="title">제목만</option>
-              <option value="song">곡 ID만</option>
+              <option value="title-song" data-i18n="fileName.titleSong">제목 + 곡 ID</option>
+              <option value="title" data-i18n="fileName.title">제목만</option>
+              <option value="song" data-i18n="fileName.song">곡 ID만</option>
+              <option value="custom" data-i18n="fileName.custom">직접 입력</option>
             </select>
           </label>
 
+          <label class="field field-wide" data-role="custom-pattern-field" hidden>
+            <span data-i18n="field.customPattern">파일명 패턴 (변수: {title}, {songId}, {date}, {time})</span>
+            <input type="text" data-setting="customPattern" placeholder="{title}-{songId}" spellcheck="false" autocomplete="off">
+          </label>
+
           <label class="field field-wide">
-            <span>가사 정리</span>
+            <span data-i18n="field.cleanMode">가사 정리</span>
             <select data-setting="cleanMode">
-              <option value="none">원본 유지</option>
-              <option value="basic">기본: 섹션 줄, /, ~ 제거</option>
-              <option value="strong">강력: 섞인 [태그]까지 제거</option>
+              <option value="none" data-i18n="cleanMode.none">원본 유지</option>
+              <option value="basic" data-i18n="cleanMode.basic">기본: 섹션 줄, /, ~ 제거</option>
+              <option value="strong" data-i18n="cleanMode.strong">강력: 섞인 [태그]까지 제거</option>
             </select>
           </label>
         </div>
@@ -49,16 +85,25 @@
         <div class="settings-footer">
           <label class="check">
             <input type="checkbox" data-setting="includeMeta">
-            <span>LRC/TXT에 제목과 곡 ID 포함</span>
+            <span data-i18n="check.includeMeta">LRC/TXT에 제목과 곡 ID 포함</span>
           </label>
-          <p class="status" data-role="status">설정이 자동 저장됩니다.</p>
+          <p class="status" data-role="status" data-i18n="status.idle">설정이 자동 저장됩니다.</p>
         </div>
+
+        <div class="stats-row" data-role="stats-row" hidden>
+          <span class="stats-icon" aria-hidden="true">📥</span>
+          <span data-i18n="stats.downloaded">지금까지</span>
+          <strong data-role="stats-count">0</strong>
+          <span data-i18n="stats.unit">개 다운로드했어요</span>
+        </div>
+
+        <p class="shortcut-hint" data-i18n="shortcut.hint">단축키: Alt + Shift + L (Suno 곡 페이지에서 즉시 다운로드)</p>
       </section>
 
       <section class="other-tools" aria-label="개발자의 다른 도구">
         <div class="section-heading">
-          <strong>개발자의 다른 도구</strong>
-          <span>바로가기</span>
+          <strong data-i18n="tools.title">개발자의 다른 도구</strong>
+          <span data-i18n="tools.subtitle">바로가기</span>
         </div>
         <div class="tool-links">
           <button type="button" data-url="https://playlistforge.com/">
@@ -73,6 +118,13 @@
             <span class="tool-copy">
               <strong>튜브부스터 <span aria-hidden="true">↗</span></strong>
               <span>단 3초, 스마트 AI가 내 영상을 50+개 언어로 번역</span>
+            </span>
+          </button>
+          <button type="button" data-url="https://comingsummer.kr/%ec%9c%a0%ed%8a%9c%eb%b8%8c-%ed%83%80%ec%9e%84%eb%9d%bc%ec%9d%b8-%ec%83%9d%ec%84%b1%ea%b8%b0/">
+            <span class="tool-icon tool-icon-timeline" aria-hidden="true"></span>
+            <span class="tool-copy">
+              <strong>유튜브 타임라인 생성기 <span aria-hidden="true">↗</span></strong>
+              <span>영상에 붙일 챕터 타임스탬프를 손쉽게 만들기</span>
             </span>
           </button>
           <button type="button" data-url="https://ieumpli.com/">
@@ -103,9 +155,24 @@
               <span>확장 프로그램 사용 문의와 피드백을 남겨주세요</span>
             </span>
           </button>
+          <button type="button" data-action="share-extension">
+            <span class="tool-icon tool-icon-share" aria-hidden="true"></span>
+            <span class="tool-copy">
+              <strong data-i18n="share.title">친구에게 공유 <span aria-hidden="true">↗</span></strong>
+              <span data-i18n="share.subtitle">설치 링크를 클립보드에 복사합니다</span>
+            </span>
+          </button>
+          <button type="button" data-url="https://chromewebstore.google.com/detail/bhmcpeaeeammcbcadpmkanfhfjklddkn/reviews">
+            <span class="tool-icon tool-icon-review" aria-hidden="true"></span>
+            <span class="tool-copy">
+              <strong data-i18n="review.title">후기 공유하기 <span aria-hidden="true">↗</span></strong>
+              <span data-i18n="review.subtitle">크롬 웹스토어에 별점과 후기를 남겨주세요</span>
+            </span>
+          </button>
         </div>
       </section>
     </main>
+    <div class="toast" data-role="toast" hidden></div>
     <script src="popup.js"></script>
   </body>
 </html>

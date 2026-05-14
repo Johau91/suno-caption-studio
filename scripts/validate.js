@@ -17,9 +17,13 @@ const required = [
   'icons/icon48.png',
   'icons/icon128.png',
   'icons/lucide/bot.svg',
+  'icons/lucide/clock.svg',
   'icons/lucide/message-circle.svg',
   'icons/lucide/messages-square.svg',
   'icons/lucide/music-2.svg',
+  'icons/lucide/settings.svg',
+  'icons/lucide/share-2.svg',
+  'icons/lucide/star.svg',
   'icons/lucide/user-round-check.svg',
   'icons/lucide/video.svg'
 ];
