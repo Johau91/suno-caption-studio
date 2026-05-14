@@ -7,6 +7,7 @@ const defaults = {
 };
 
 const fields = [...document.querySelectorAll('[data-setting]')];
+const toolLinks = [...document.querySelectorAll('[data-url]')];
 const status = document.querySelector('[data-role="status"]');
 
 init();
@@ -18,6 +19,12 @@ async function init() {
 
   for (const field of fields) {
     field.addEventListener('change', () => save(readForm()));
+  }
+
+  for (const link of toolLinks) {
+    link.addEventListener('click', () => {
+      chrome.tabs.create({ url: link.dataset.url });
+    });
   }
 }
 

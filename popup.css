@@ -36,7 +36,8 @@ header strong {
 header span,
 .field span,
 .check,
-.status {
+.status,
+.other-tools > span {
   color: #64748b;
   font-size: 12px;
   line-height: 1.35;
@@ -76,4 +77,42 @@ select {
   min-height: 18px;
   margin: 0;
   color: #047857;
+}
+
+.other-tools {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.other-tools > span {
+  font-weight: 700;
+}
+
+.tool-links {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+
+.tool-links button {
+  width: 100%;
+  height: 32px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #0f172a;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 760;
+  text-align: left;
+  padding: 0 10px;
+}
+
+.tool-links button:hover,
+.tool-links button:focus-visible {
+  background: #eef2ff;
+  border-color: #a5b4fc;
 }
