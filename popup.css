@@ -7,7 +7,7 @@
   --surface: #ffffff;
   --surface-soft: #f8fafc;
   --surface-hover: #f1f5f9;
-  --brand: #10b981;
+  --brand: #2563eb;
 }
 
 * {
@@ -61,10 +61,10 @@ body {
 
 .save-badge {
   flex: 0 0 auto;
-  border: 1px solid #bbf7d0;
+  border: 1px solid #bfdbfe;
   border-radius: 999px;
-  background: #ecfdf5;
-  color: #047857;
+  background: #eff6ff;
+  color: #1d4ed8;
   padding: 5px 9px;
   font-size: 11px;
   font-weight: 800;
@@ -114,8 +114,8 @@ select {
 }
 
 select:focus {
-  border-color: rgba(16, 185, 129, 0.72);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.14);
+  border-color: rgba(37, 99, 235, 0.72);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
 }
 
 .settings-footer {
@@ -146,7 +146,7 @@ select:focus {
 .status {
   flex: 0 0 auto;
   margin: 0;
-  color: #047857;
+  color: #1d4ed8;
   font-weight: 700;
   text-align: right;
 }
@@ -278,9 +278,9 @@ select:focus {
 
 .tool-links button:hover,
 .tool-links button:focus-visible {
-  border-color: rgba(16, 185, 129, 0.5);
+  border-color: rgba(37, 99, 235, 0.5);
   background: var(--surface-hover);
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.1);
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.1);
   transform: translateY(-1px);
   outline: none;
 }
