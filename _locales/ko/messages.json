@@ -1,10 +1,10 @@
 {
   "extension_name": {
-    "message": "Suno Caption Studio",
+    "message": "SUNO 가사 다운로더",
     "description": "확장 프로그램 이름"
   },
   "extension_short_name": {
-    "message": "Caption Studio",
+    "message": "가사 다운로더",
     "description": "짧은 확장 프로그램 이름"
   },
   "extension_description": {

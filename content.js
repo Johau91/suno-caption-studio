@@ -62,16 +62,16 @@
     root.id = 'suno-caption-studio-root';
     root.className = 'scs-root';
     root.innerHTML = `
-      <section class="scs-panel" aria-label="Suno Caption Studio">
+      <section class="scs-panel" aria-label="SUNO 가사 다운로더">
         <header class="scs-header">
           <div class="scs-title">
-            <strong>캡션 저장 설정</strong>
+            <strong>가사 저장 설정</strong>
             <span data-role="subtitle">확장 프로그램 아이콘으로 열고 닫기</span>
           </div>
           <button class="scs-icon-button" type="button" data-action="close" aria-label="닫기">×</button>
         </header>
         <div class="scs-body">
-          <div class="scs-status" data-role="status">곡 페이지에서 캡션을 불러올 수 있습니다.</div>
+          <div class="scs-status" data-role="status">곡 페이지에서 가사를 불러올 수 있습니다.</div>
           <div class="scs-main">
             <div class="scs-field scs-format">
               <label for="scs-format">형식</label>
@@ -104,7 +104,7 @@
           </div>
           </details>
           <div class="scs-empty">
-            현재 페이지에서 동기화된 캡션을 찾지 못했습니다. Suno에 로그인되어 있는지 확인하고 곡 상세 페이지에서 다시 시도하세요.
+            현재 페이지에서 동기화된 가사를 찾지 못했습니다. Suno에 로그인되어 있는지 확인하고 곡 상세 페이지에서 다시 시도하세요.
           </div>
           <details class="scs-preview">
             <summary class="scs-preview-head">
@@ -543,7 +543,7 @@
     }
 
     state.busy = true;
-    setStatus('캡션 데이터를 불러오는 중입니다.', '');
+    setStatus('가사 데이터를 불러오는 중입니다.', '');
     render();
 
     try {
@@ -554,7 +554,7 @@
       });
 
       if (!response?.ok) {
-        throw new Error(response?.error || '캡션 데이터를 불러오지 못했습니다.');
+        throw new Error(response?.error || '가사 데이터를 불러오지 못했습니다.');
       }
 
       const parsed = parseCaptionPayload(response.payload, songId);
@@ -776,7 +776,7 @@
 
   function toLrc(lines, includeMeta) {
     const meta = includeMeta
-      ? [`[ti:${state.title || state.songId}]`, `[re:Suno Caption Studio]`, `[id:${state.songId}]`, '']
+      ? [`[ti:${state.title || state.songId}]`, `[re:SUNO 가사 다운로더]`, `[id:${state.songId}]`, '']
       : [];
     return meta.concat(lines.map((line) => `${formatLrcTime(line.start)}${line.text}`)).join('\n');
   }
@@ -789,7 +789,7 @@
 
   function toTxt(lines, includeMeta) {
     const output = includeMeta
-      ? [`Title: ${state.title || state.songId}`, `Song ID: ${state.songId}`, `Exported by: Suno Caption Studio`, '']
+      ? [`Title: ${state.title || state.songId}`, `Song ID: ${state.songId}`, `Exported by: SUNO 가사 다운로더`, '']
       : [];
 
     lines.forEach((line, index) => {
@@ -873,7 +873,7 @@
 
     root.dataset.open = String(state.open);
     root.dataset.empty = String(!state.lines.length && !state.busy);
-    els.subtitle.textContent = state.title || state.songId || 'Suno 곡 캡션 내보내기';
+    els.subtitle.textContent = state.title || state.songId || 'SUNO 가사 다운로드';
     els.summary.textContent = state.lines.length ? `${state.lines.length} lines / ${state.settings.format.toUpperCase()}` : '대기 중';
     els.file.textContent = state.lines.length ? makeFileName(state.settings.format) : '파일명 미리보기';
     els.preview.textContent = state.lines.length ? previewText(renderExport(state.settings.format)) : '';

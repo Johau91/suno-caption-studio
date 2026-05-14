@@ -1,10 +1,10 @@
 {
   "extension_name": {
-    "message": "Suno Caption Studio",
+    "message": "SUNO Lyrics Downloader",
     "description": "Extension name"
   },
   "extension_short_name": {
-    "message": "Caption Studio",
+    "message": "Lyrics Downloader",
     "description": "Short extension name"
   },
   "extension_description": {
