@@ -99,6 +99,10 @@ select {
 .tool-links button {
   width: 100%;
   min-height: 58px;
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  align-items: center;
+  gap: 10px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   background: #ffffff;
@@ -110,7 +114,48 @@ select {
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05);
 }
 
-.tool-links button strong {
+.tool-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.tool-icon-ieumpli {
+  background: linear-gradient(135deg, #f97316, #ec4899);
+}
+
+.tool-icon-tube {
+  background: linear-gradient(135deg, #ef4444, #7c3aed);
+  font-size: 13px;
+}
+
+.tool-icon-forge {
+  background: linear-gradient(135deg, #2563eb, #14b8a6);
+}
+
+.tool-icon-cafe {
+  background: #03c75a;
+  font-size: 14px;
+}
+
+.tool-icon-chat {
+  background: #facc15;
+  color: #3f2d00;
+  font-size: 12px;
+}
+
+.tool-copy {
+  min-width: 0;
+  display: block;
+}
+
+.tool-copy strong {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -121,12 +166,12 @@ select {
   line-height: 1.25;
 }
 
-.tool-links button strong span {
+.tool-copy strong span {
   color: #94a3b8;
   font-size: 11px;
 }
 
-.tool-links button > span {
+.tool-copy > span {
   display: block;
   margin-top: 4px;
   color: #64748b;
