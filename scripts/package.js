@@ -45,7 +45,9 @@ const include = [
   'icons/brand/kakaotalk.svg',
   'icons/brand/naver.svg',
   'icons/brand/threads.svg',
-  'icons/brand/x.svg'
+  'icons/brand/webwoori.svg',
+  'icons/brand/x.svg',
+  'icons/brand/youtube.svg'
 ];
 
 const crcTable = Array.from({ length: 256 }, (_, index) => {

@@ -389,6 +389,28 @@ input[type="text"]:focus {
   background: #0ea5e9;
 }
 
+/* YouTube uses a real brand SVG via background-image (mask-mode bug workaround) */
+.tool-icon-youtube {
+  background:
+    url("icons/brand/youtube.svg") center / 70% no-repeat,
+    #FF0000;
+}
+
+.tool-icon-youtube::before {
+  display: none;
+}
+
+/* Developer site (webwoori.com) — uses the site's actual favicon "W" mark */
+.tool-icon-webwoori {
+  background:
+    url("icons/brand/webwoori.svg") center / 70% no-repeat,
+    #0f172a;
+}
+
+.tool-icon-webwoori::before {
+  display: none;
+}
+
 .tool-copy {
   min-width: 0;
   display: block;
