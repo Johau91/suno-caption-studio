@@ -18,6 +18,12 @@ async function init() {
   applyTheme(currentTheme);
   applyAll(currentLang);
   syncTheme(currentTheme);
+  showVersion();
+  showShortcut();
+
+  document.querySelector('[data-action="open-shortcuts"]')?.addEventListener('click', () => {
+    chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
+  });
 
   for (const button of langButtons) {
     button.addEventListener('click', () => switchLanguage(button.dataset.lang));
@@ -85,10 +91,43 @@ async function switchLanguage(lang) {
 function applyAll(lang) {
   window.SCS_I18N.apply(lang, { titleKey: 'options.docTitle' });
   syncLangToggle(lang);
+  showShortcut();
 }
 
 function syncLangToggle(lang) {
   for (const button of langButtons) {
     button.setAttribute('aria-pressed', String(button.dataset.lang === lang));
   }
+}
+
+function showVersion() {
+  const slot = document.querySelector('[data-role="about-version"]');
+  if (!slot) return;
+  try {
+    slot.textContent = `v${chrome.runtime.getManifest().version}`;
+  } catch {
+    slot.textContent = '—';
+  }
+}
+
+async function showShortcut() {
+  const slot = document.querySelector('[data-role="shortcut-current"]');
+  if (!slot) return;
+
+  const suggested = chrome.runtime.getManifest().commands?.['download-current']?.suggested_key?.default || '';
+  let bound = '';
+  try {
+    if (chrome.commands?.getAll) {
+      const commands = await chrome.commands.getAll();
+      bound = (commands.find((c) => c.name === 'download-current')?.shortcut || '').trim();
+    }
+  } catch {
+    // Ignore — fall back to manifest's suggested key.
+  }
+
+  const display = bound || suggested;
+  const isUnset = !display;
+  slot.textContent = isUnset ? window.SCS_I18N.t(currentLang, 'prefs.shortcut.unset') : display;
+  slot.dataset.unset = String(isUnset);
+  slot.dataset.suggested = String(!bound && !!suggested);
 }

@@ -788,29 +788,6 @@ input[type="text"]:focus {
   line-height: 1;
 }
 
-/* Shortcut hint — now a button that opens chrome://extensions/shortcuts */
-.shortcut-hint {
-  margin: 0;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 11px;
-  line-height: 1.35;
-  text-align: center;
-  width: 100%;
-  padding: 4px 6px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 120ms ease, color 120ms ease;
-}
-
-.shortcut-hint:hover,
-.shortcut-hint:focus-visible {
-  background: var(--surface-hover);
-  color: var(--brand-strong);
-  outline: none;
-}
 
 /* Review request prompt — shown after the user accumulates downloads */
 .review-prompt {

@@ -44,7 +44,6 @@ const shareToggleButton = document.querySelector('[data-action="toggle-share"]')
 const sharePopover = document.querySelector('[data-role="share-popover"]');
 const shareOptionButtons = [...document.querySelectorAll('[data-share]')];
 const openOptionsButton = document.querySelector('[data-action="open-options"]');
-const openShortcutsButton = document.querySelector('[data-action="open-shortcuts"]');
 const toast = document.querySelector('[data-role="toast"]');
 const reviewPrompt = document.querySelector('[data-role="review-prompt"]');
 const reviewPromptTitle = document.querySelector('[data-role="review-prompt-title"]');
@@ -122,10 +121,6 @@ async function init() {
     window.close();
   });
 
-  openShortcutsButton?.addEventListener('click', () => {
-    chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
-    window.close();
-  });
 
   updateDismissButton?.addEventListener('click', dismissUpdateBanner);
   reviewPromptLeave?.addEventListener('click', () => handleReviewPrompt('leave'));
