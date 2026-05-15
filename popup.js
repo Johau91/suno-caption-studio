@@ -1,7 +1,10 @@
 const STORAGE_KEY = 'sunoCaptionStudio.settings';
 const STATS_KEY = 'sunoCaptionStudio.stats';
 const UPDATE_INFO_KEY = 'sunoCaptionStudio.updateInfo';
+const REVIEW_PROMPT_KEY = 'sunoCaptionStudio.reviewPrompt';
 const STORE_URL = 'https://chromewebstore.google.com/detail/bhmcpeaeeammcbcadpmkanfhfjklddkn';
+const REVIEW_URL = 'https://chromewebstore.google.com/detail/bhmcpeaeeammcbcadpmkanfhfjklddkn/reviews';
+const REVIEW_THRESHOLDS = [5, 25];
 
 const defaults = {
   format: 'lrc',
@@ -9,8 +12,23 @@ const defaults = {
   customPattern: '{title}-{songId}',
   includeMeta: true,
   cleanMode: 'strong',
-  language: 'ko'
+  language: 'ko',
+  theme: 'system'
 };
+
+const THEMES = ['system', 'light', 'dark'];
+
+function normalizeTheme(theme) {
+  return THEMES.includes(theme) ? theme : 'system';
+}
+
+function applyTheme(theme) {
+  if (theme === 'light' || theme === 'dark') {
+    document.documentElement.setAttribute('data-theme', theme);
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+}
 
 const fields = [...document.querySelectorAll('[data-setting]')];
 const toolLinks = [...document.querySelectorAll('[data-url]')];
@@ -22,9 +40,17 @@ const customPatternField = document.querySelector('[data-role="custom-pattern-fi
 const statsRow = document.querySelector('[data-role="stats-row"]');
 const statsCount = document.querySelector('[data-role="stats-count"]');
 const openSunoButton = document.querySelector('[data-action="open-suno"]');
-const shareButton = document.querySelector('[data-action="share-extension"]');
+const shareToggleButton = document.querySelector('[data-action="toggle-share"]');
+const sharePopover = document.querySelector('[data-role="share-popover"]');
+const shareOptionButtons = [...document.querySelectorAll('[data-share]')];
 const openOptionsButton = document.querySelector('[data-action="open-options"]');
+const openShortcutsButton = document.querySelector('[data-action="open-shortcuts"]');
 const toast = document.querySelector('[data-role="toast"]');
+const reviewPrompt = document.querySelector('[data-role="review-prompt"]');
+const reviewPromptTitle = document.querySelector('[data-role="review-prompt-title"]');
+const reviewPromptLeave = document.querySelector('[data-role="review-prompt-leave"]');
+const reviewPromptLater = document.querySelector('[data-role="review-prompt-later"]');
+const reviewPromptClose = document.querySelector('[data-role="review-prompt-close"]');
 
 let currentLang = 'ko';
 let statusTimer = 0;
@@ -33,16 +59,18 @@ let toastTimer = 0;
 init();
 
 async function init() {
-  const result = await chrome.storage.local.get([STORAGE_KEY, UPDATE_INFO_KEY, STATS_KEY]);
+  const result = await chrome.storage.local.get([STORAGE_KEY, UPDATE_INFO_KEY, STATS_KEY, REVIEW_PROMPT_KEY]);
   const settings = normalizeSettings(result[STORAGE_KEY] || {});
 
   currentLang = window.SCS_I18N.normalizeLang(settings.language);
+  applyTheme(normalizeTheme(settings.theme));
   applyI18n(currentLang);
 
   render(settings);
   updateCustomPatternVisibility(settings.fileName);
   showUpdateBannerIfNeeded(result[UPDATE_INFO_KEY]);
   showStats(result[STATS_KEY]);
+  maybeShowReviewPrompt(result[STATS_KEY], result[REVIEW_PROMPT_KEY]);
 
   for (const field of fields) {
     const eventName = field.tagName === 'INPUT' && field.type === 'text' ? 'input' : 'change';
@@ -65,7 +93,25 @@ async function init() {
     chrome.tabs.create({ url: 'https://suno.com/' });
   });
 
-  shareButton?.addEventListener('click', shareExtension);
+  shareToggleButton?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    setSharePopoverOpen(sharePopover?.hidden);
+  });
+
+  sharePopover?.addEventListener('click', (event) => event.stopPropagation());
+
+  for (const button of shareOptionButtons) {
+    button.addEventListener('click', () => handleShare(button.dataset.share));
+  }
+
+  document.addEventListener('click', () => setSharePopoverOpen(false));
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && sharePopover && !sharePopover.hidden) {
+      setSharePopoverOpen(false);
+      shareToggleButton?.focus();
+    }
+  });
 
   openOptionsButton?.addEventListener('click', () => {
     if (chrome.runtime.openOptionsPage) {
@@ -76,7 +122,15 @@ async function init() {
     window.close();
   });
 
+  openShortcutsButton?.addEventListener('click', () => {
+    chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
+    window.close();
+  });
+
   updateDismissButton?.addEventListener('click', dismissUpdateBanner);
+  reviewPromptLeave?.addEventListener('click', () => handleReviewPrompt('leave'));
+  reviewPromptLater?.addEventListener('click', () => handleReviewPrompt('later'));
+  reviewPromptClose?.addEventListener('click', () => handleReviewPrompt('close'));
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
@@ -84,11 +138,13 @@ async function init() {
       showStats(changes[STATS_KEY].newValue);
     }
     if (changes[STORAGE_KEY]?.newValue) {
-      const lang = window.SCS_I18N.normalizeLang(changes[STORAGE_KEY].newValue.language);
+      const next = changes[STORAGE_KEY].newValue;
+      const lang = window.SCS_I18N.normalizeLang(next.language);
       if (lang !== currentLang) {
         currentLang = lang;
         applyI18n(currentLang);
       }
+      applyTheme(normalizeTheme(next.theme));
     }
   });
 }
@@ -105,6 +161,7 @@ function normalizeSettings(saved) {
     settings.customPattern = defaults.customPattern;
   }
   settings.language = window.SCS_I18N.normalizeLang(settings.language);
+  settings.theme = normalizeTheme(settings.theme);
   delete settings.cleanMarkers;
   return settings;
 }
@@ -177,24 +234,125 @@ function applyI18n(lang) {
   if (status && !statusTimer) {
     status.textContent = window.SCS_I18N.t(lang, 'status.idle');
   }
+  refreshReviewPromptTitle();
 }
 
-async function shareExtension() {
-  try {
-    if (navigator.share) {
-      await navigator.share({
-        title: window.SCS_I18N.t(currentLang, 'docTitle'),
-        text: window.SCS_I18N.t(currentLang, 'docTitle'),
-        url: STORE_URL
-      });
+function maybeShowReviewPrompt(stats, state) {
+  if (!reviewPrompt) return;
+  const count = Number(stats?.downloadCount ?? 0);
+  const promptState = normalizeReviewPromptState(state);
+  if (promptState.nextThreshold === null) {
+    reviewPrompt.hidden = true;
+    return;
+  }
+  if (count < promptState.nextThreshold) {
+    reviewPrompt.hidden = true;
+    return;
+  }
+  reviewPrompt.dataset.count = String(count);
+  refreshReviewPromptTitle();
+  reviewPrompt.hidden = false;
+}
+
+function refreshReviewPromptTitle() {
+  if (!reviewPrompt || !reviewPromptTitle) return;
+  const count = Number(reviewPrompt.dataset.count ?? 0);
+  if (count <= 0) return;
+  reviewPromptTitle.textContent = window.SCS_I18N.t(currentLang, 'review.prompt.title', { count });
+}
+
+function normalizeReviewPromptState(state) {
+  const next = {
+    nextThreshold: REVIEW_THRESHOLDS[0],
+    snoozes: 0,
+    ...(state || {})
+  };
+  if (next.nextThreshold !== null && typeof next.nextThreshold !== 'number') {
+    next.nextThreshold = REVIEW_THRESHOLDS[0];
+  }
+  return next;
+}
+
+async function handleReviewPrompt(action) {
+  const result = await chrome.storage.local.get(REVIEW_PROMPT_KEY);
+  const state = normalizeReviewPromptState(result[REVIEW_PROMPT_KEY]);
+
+  if (action === 'leave') {
+    state.nextThreshold = null;
+    chrome.tabs.create({ url: REVIEW_URL });
+  } else {
+    // 'later' or 'close' both snooze, with the next threshold from the schedule.
+    state.snoozes = (state.snoozes || 0) + 1;
+    const nextIndex = Math.min(state.snoozes, REVIEW_THRESHOLDS.length - 1);
+    state.nextThreshold = state.snoozes > REVIEW_THRESHOLDS.length - 1
+      ? null
+      : REVIEW_THRESHOLDS[nextIndex];
+  }
+
+  await chrome.storage.local.set({ [REVIEW_PROMPT_KEY]: state });
+  if (reviewPrompt) reviewPrompt.hidden = true;
+}
+
+function setSharePopoverOpen(open) {
+  if (!sharePopover || !shareToggleButton) return;
+  sharePopover.hidden = !open;
+  shareToggleButton.setAttribute('aria-expanded', String(Boolean(open)));
+}
+
+async function handleShare(target) {
+  setSharePopoverOpen(false);
+  const title = window.SCS_I18N.t(currentLang, 'docTitle');
+  const text = window.SCS_I18N.t(currentLang, 'share.text');
+
+  switch (target) {
+    case 'copy': {
+      await copyToClipboard(STORE_URL, 'toast.copied');
       return;
     }
-  } catch (error) {
-    // Web Share cancelled or unavailable — fall through to clipboard copy.
+    case 'kakao': {
+      // KakaoTalk has no public URL share scheme without the JS SDK; the most
+      // reliable path is to copy a chat-friendly snippet so the user can paste
+      // into a conversation. The link unfurls into a card automatically.
+      await copyToClipboard(`${text}\n${STORE_URL}`, 'toast.kakaoCopied');
+      return;
+    }
+    case 'discord': {
+      // Discord has no share-link API either — copy the snippet so the user
+      // can paste into any server/DM. Discord auto-embeds the URL preview.
+      await copyToClipboard(`${text}\n${STORE_URL}`, 'toast.discordCopied');
+      return;
+    }
+    case 'x': {
+      const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(STORE_URL)}`;
+      chrome.tabs.create({ url });
+      return;
+    }
+    case 'threads': {
+      const url = `https://www.threads.net/intent/post?text=${encodeURIComponent(`${text} ${STORE_URL}`)}`;
+      chrome.tabs.create({ url });
+      return;
+    }
+    case 'naver-blog': {
+      const url = `https://blog.naver.com/openapi/share?url=${encodeURIComponent(STORE_URL)}&title=${encodeURIComponent(title)}`;
+      chrome.tabs.create({ url });
+      return;
+    }
+    case 'naver-cafe': {
+      // Naver Cafe has no generic share endpoint — open the developer's cafe and
+      // copy the link so the user can paste it into a post.
+      await copyToClipboard(`${text}\n${STORE_URL}`, 'toast.cafeCopied');
+      chrome.tabs.create({ url: 'https://cafe.naver.com/playlistforge' });
+      return;
+    }
+    default:
+      return;
   }
+}
+
+async function copyToClipboard(value, successKey) {
   try {
-    await navigator.clipboard.writeText(STORE_URL);
-    showToast(window.SCS_I18N.t(currentLang, 'toast.copied'));
+    await navigator.clipboard.writeText(value);
+    showToast(window.SCS_I18N.t(currentLang, successKey));
   } catch (error) {
     showToast(window.SCS_I18N.t(currentLang, 'toast.copyFailed'));
   }

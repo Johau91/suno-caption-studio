@@ -13,16 +13,22 @@ const required = [
   'options.html',
   'options.css',
   'options.js',
+  'welcome.html',
+  'welcome.css',
+  'welcome.js',
   'i18n.js',
+  'logo.png',
   '_locales/ko/messages.json',
   '_locales/en/messages.json',
   'icons/icon16.png',
   'icons/icon32.png',
   'icons/icon48.png',
   'icons/icon128.png',
+  'icons/suno.png',
   'icons/lucide/bot.svg',
   'icons/lucide/clock.svg',
   'icons/lucide/external-link.svg',
+  'icons/lucide/link-2.svg',
   'icons/lucide/message-circle.svg',
   'icons/lucide/messages-square.svg',
   'icons/lucide/music-2.svg',
@@ -30,7 +36,12 @@ const required = [
   'icons/lucide/share-2.svg',
   'icons/lucide/star.svg',
   'icons/lucide/user-round-check.svg',
-  'icons/lucide/video.svg'
+  'icons/lucide/video.svg',
+  'icons/brand/discord.svg',
+  'icons/brand/kakaotalk.svg',
+  'icons/brand/naver.svg',
+  'icons/brand/threads.svg',
+  'icons/brand/x.svg'
 ];
 
 for (const file of required) {

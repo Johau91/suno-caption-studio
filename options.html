@@ -29,6 +29,18 @@
           <button type="button" data-lang="es" aria-pressed="false">ES</button>
         </div>
       </section>
+
+      <section class="options-card">
+        <div class="options-card-title">
+          <strong data-i18n="prefs.theme">테마</strong>
+          <p data-i18n="prefs.themeHint">라이트, 다크, 또는 시스템 설정을 따릅니다.</p>
+        </div>
+        <div class="theme-toggle" role="group" aria-label="Theme">
+          <button type="button" data-theme-choice="system" aria-pressed="true" data-i18n="theme.system">시스템</button>
+          <button type="button" data-theme-choice="light" aria-pressed="false" data-i18n="theme.light">라이트</button>
+          <button type="button" data-theme-choice="dark" aria-pressed="false" data-i18n="theme.dark">다크</button>
+        </div>
+      </section>
     </main>
     <script src="i18n.js"></script>
     <script src="options.js"></script>

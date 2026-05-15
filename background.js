@@ -3,6 +3,10 @@ const BADGE_TEXT = 'NEW';
 const BADGE_COLOR = '#1d4ed8';
 
 chrome.runtime.onInstalled.addListener(async (details) => {
+  if (details.reason === 'install') {
+    chrome.tabs.create({ url: chrome.runtime.getURL('welcome.html') });
+    return;
+  }
   if (details.reason !== 'update') {
     return;
   }

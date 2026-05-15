@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SUNO 가사 다운로더 — 환영합니다</title>
+    <link rel="stylesheet" href="popup.css">
+    <link rel="stylesheet" href="welcome.css">
+  </head>
+  <body class="welcome-body">
+    <main class="welcome-shell">
+      <header class="welcome-hero">
+        <img class="welcome-logo" src="logo.png" alt="">
+        <div class="welcome-hero-text">
+          <h1 data-i18n="welcome.title">설치해주셔서 감사해요 🎉</h1>
+          <p data-i18n="welcome.subtitle">Suno 곡 페이지에서 가사를 LRC, SRT, TXT로 한 번에 받으세요.</p>
+        </div>
+      </header>
+
+      <section class="welcome-steps" aria-label="사용법">
+        <article class="welcome-step">
+          <span class="welcome-step-num">1</span>
+          <strong data-i18n="welcome.step1.title">Suno 열기</strong>
+          <p data-i18n="welcome.step1.desc">브라우저에서 suno.com에 로그인하고 듣고 싶은 곡 페이지로 이동합니다.</p>
+        </article>
+        <article class="welcome-step">
+          <span class="welcome-step-num">2</span>
+          <strong data-i18n="welcome.step2.title">썸네일 위 다운로드 버튼</strong>
+          <p data-i18n="welcome.step2.desc">곡 썸네일 위에 LRC / SRT / TXT 버튼이 자동으로 추가됩니다. 원하는 형식 클릭.</p>
+        </article>
+        <article class="welcome-step">
+          <span class="welcome-step-num">3</span>
+          <strong data-i18n="welcome.step3.title">저장 완료</strong>
+          <p data-i18n="welcome.step3.desc">브라우저 다운로드 폴더에 저장됩니다. 설정에서 파일명·정리 방식 변경 가능.</p>
+        </article>
+      </section>
+
+      <section class="welcome-tips">
+        <h2 data-i18n="welcome.tips.title">꿀팁</h2>
+        <ul>
+          <li>
+            <span class="welcome-tip-icon" aria-hidden="true">⌨️</span>
+            <span data-i18n="welcome.tips.shortcut">단축키 Alt + Shift + L로 즉시 다운로드</span>
+          </li>
+          <li>
+            <span class="welcome-tip-icon" aria-hidden="true">🌏</span>
+            <span data-i18n="welcome.tips.lang">환경설정에서 5개 언어 (한/영/일/중/스) 전환</span>
+          </li>
+          <li>
+            <span class="welcome-tip-icon" aria-hidden="true">📤</span>
+            <span data-i18n="welcome.tips.share">친구에게 공유하면 카톡·디스코드·X·블로그·카페로 전파</span>
+          </li>
+        </ul>
+      </section>
+
+      <footer class="welcome-cta">
+        <button type="button" class="welcome-cta-primary" data-action="open-suno" data-i18n="welcome.cta.openSuno">Suno 열기</button>
+        <button type="button" class="welcome-cta-secondary" data-action="open-options" data-i18n="welcome.cta.openOptions">환경설정</button>
+        <button type="button" class="welcome-cta-ghost" data-action="close" data-i18n="welcome.cta.close">닫기</button>
+      </footer>
+    </main>
+    <script src="i18n.js"></script>
+    <script src="welcome.js"></script>
+  </body>
+</html>

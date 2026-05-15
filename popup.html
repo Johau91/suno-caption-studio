@@ -14,25 +14,61 @@
           <span data-i18n="header.subtitle">썸네일 다운로드 버튼 기본값</span>
         </div>
         <div class="popup-header-actions">
-          <button type="button" class="header-icon-btn" data-action="open-suno"
-            data-i18n-title="header.openSuno" data-i18n-aria-label="header.openSuno"
-            title="Suno 열기" aria-label="Suno 열기">
-            <span class="header-icon header-icon-external" aria-hidden="true"></span>
+          <button type="button" class="header-icon-btn header-icon-btn-brand" data-action="open-suno"
+            data-i18n-tooltip="header.openSuno" data-i18n-aria-label="header.openSuno"
+            data-tooltip="Suno 열기" aria-label="Suno 열기">
+            <img class="header-brand-img" src="icons/suno.png" alt="" aria-hidden="true">
           </button>
-          <button type="button" class="header-icon-btn" data-action="share-extension"
-            data-i18n-title="share.title" data-i18n-aria-label="share.title"
-            title="친구에게 공유" aria-label="친구에게 공유">
-            <span class="header-icon header-icon-share" aria-hidden="true"></span>
-          </button>
+          <div class="share-wrap">
+            <button type="button" class="header-icon-btn" data-action="toggle-share"
+              aria-haspopup="true" aria-expanded="false" aria-controls="share-popover"
+              data-i18n-tooltip="tooltip.share" data-i18n-aria-label="share.title"
+              data-tooltip="공유" aria-label="친구에게 공유">
+              <span class="header-icon header-icon-share" aria-hidden="true"></span>
+            </button>
+            <div class="share-popover" id="share-popover" data-role="share-popover" role="menu" hidden>
+              <p class="share-popover-title" data-i18n="share.menu.title">어디로 공유할까요?</p>
+              <button type="button" class="share-option" data-share="copy" role="menuitem">
+                <span class="share-option-badge share-badge-copy" aria-hidden="true"></span>
+                <span class="share-option-label" data-i18n="share.option.copy">링크 복사</span>
+              </button>
+              <button type="button" class="share-option" data-share="kakao" role="menuitem">
+                <span class="share-option-badge share-badge-kakao" aria-hidden="true">
+                  <img src="icons/brand/kakaotalk.svg" alt="">
+                </span>
+                <span class="share-option-label" data-i18n="share.option.kakao">카카오톡</span>
+              </button>
+              <button type="button" class="share-option" data-share="discord" role="menuitem">
+                <span class="share-option-badge share-badge-discord" aria-hidden="true"></span>
+                <span class="share-option-label" data-i18n="share.option.discord">디스코드</span>
+              </button>
+              <button type="button" class="share-option" data-share="x" role="menuitem">
+                <span class="share-option-badge share-badge-x" aria-hidden="true"></span>
+                <span class="share-option-label" data-i18n="share.option.x">X (Twitter)</span>
+              </button>
+              <button type="button" class="share-option" data-share="threads" role="menuitem">
+                <span class="share-option-badge share-badge-threads" aria-hidden="true"></span>
+                <span class="share-option-label" data-i18n="share.option.threads">쓰레드</span>
+              </button>
+              <button type="button" class="share-option" data-share="naver-blog" role="menuitem">
+                <span class="share-option-badge share-badge-naver" aria-hidden="true"></span>
+                <span class="share-option-label" data-i18n="share.option.naverBlog">네이버 블로그</span>
+              </button>
+              <button type="button" class="share-option" data-share="naver-cafe" role="menuitem">
+                <span class="share-option-badge share-badge-naver" aria-hidden="true"></span>
+                <span class="share-option-label" data-i18n="share.option.naverCafe">네이버 카페</span>
+              </button>
+            </div>
+          </div>
           <button type="button" class="header-icon-btn"
             data-url="https://chromewebstore.google.com/detail/bhmcpeaeeammcbcadpmkanfhfjklddkn/reviews"
-            data-i18n-title="review.title" data-i18n-aria-label="review.title"
-            title="후기 공유하기" aria-label="후기 공유하기">
+            data-i18n-tooltip="tooltip.review" data-i18n-aria-label="review.title"
+            data-tooltip="리뷰" aria-label="후기 공유하기">
             <span class="header-icon header-icon-review" aria-hidden="true"></span>
           </button>
           <button type="button" class="header-icon-btn" data-action="open-options"
-            data-i18n-title="prefs.label" data-i18n-aria-label="prefs.label"
-            title="환경설정" aria-label="환경설정">
+            data-i18n-tooltip="tooltip.settings" data-i18n-aria-label="prefs.label"
+            data-tooltip="설정" aria-label="환경설정">
             <span class="header-icon header-icon-settings" aria-hidden="true"></span>
           </button>
         </div>
@@ -98,8 +134,24 @@
           <span data-i18n="stats.unit">개 가사를 저장했어요</span>
         </div>
 
-        <p class="shortcut-hint" data-i18n="shortcut.hint">단축키: Alt + Shift + L (Suno 곡 페이지에서 즉시 다운로드)</p>
+        <button type="button" class="shortcut-hint" data-action="open-shortcuts"
+          data-i18n-tooltip="shortcut.changeHint" data-tooltip="단축키 변경하기 →" title="단축키 변경하기">
+          <span data-i18n="shortcut.hint">단축키: Alt + Shift + L (Suno 곡 페이지에서 즉시 다운로드)</span>
+        </button>
       </section>
+
+      <aside class="review-prompt" data-role="review-prompt" hidden>
+        <span class="review-prompt-icon" aria-hidden="true">⭐</span>
+        <div class="review-prompt-text">
+          <strong data-role="review-prompt-title">다운로드 5개 돌파 🎉</strong>
+          <span data-i18n="review.prompt.subtitle">이 확장이 도움됐다면 별점을 남겨주세요. 큰 힘이 됩니다.</span>
+        </div>
+        <div class="review-prompt-actions">
+          <button type="button" class="review-prompt-leave" data-role="review-prompt-leave" data-i18n="review.prompt.leave">후기 남기기</button>
+          <button type="button" class="review-prompt-later" data-role="review-prompt-later" data-i18n="review.prompt.later">나중에</button>
+        </div>
+        <button type="button" class="review-prompt-close" data-role="review-prompt-close" data-i18n-aria-label="review.prompt.close" aria-label="닫기">×</button>
+      </aside>
 
       <section class="other-tools" aria-label="개발자의 다른 도구">
         <div class="section-heading">
