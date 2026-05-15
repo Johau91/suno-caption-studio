@@ -1,14 +1,36 @@
 const UPDATE_INFO_KEY = 'sunoCaptionStudio.updateInfo';
+const QUOTA_KEY = 'sunoCaptionStudio.quota';
 const BADGE_TEXT = 'NEW';
 const BADGE_COLOR = '#1d4ed8';
 
 chrome.runtime.onInstalled.addListener(async (details) => {
   if (details.reason === 'install') {
+    // Fresh install → new user, subject to download quota.
+    await chrome.storage.local.set({
+      [QUOTA_KEY]: {
+        isNewUser: true,
+        installedAt: Date.now(),
+        shareCount: 0,
+        downloadCount: 0
+      }
+    });
     chrome.tabs.create({ url: chrome.runtime.getURL('welcome.html') });
     return;
   }
   if (details.reason !== 'update') {
     return;
+  }
+  // Update flow: grandfather pre-quota users (anyone updating from any older version).
+  const existing = await chrome.storage.local.get(QUOTA_KEY);
+  if (!existing[QUOTA_KEY]) {
+    await chrome.storage.local.set({
+      [QUOTA_KEY]: {
+        isNewUser: false,
+        installedAt: null,
+        shareCount: 0,
+        downloadCount: 0
+      }
+    });
   }
   const currentVersion = chrome.runtime.getManifest().version;
   if (details.previousVersion === currentVersion) {

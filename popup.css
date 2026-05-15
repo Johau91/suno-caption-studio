@@ -788,6 +788,76 @@ input[type="text"]:focus {
   line-height: 1;
 }
 
+/* Quota gauge — only shown for new users with download cap */
+.quota-row {
+  display: grid;
+  gap: 6px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-soft);
+}
+
+.quota-row[hidden] {
+  display: none;
+}
+
+.quota-text {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-soft);
+  flex-wrap: wrap;
+}
+
+.quota-label {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.quota-text strong {
+  color: var(--brand-strong);
+  font-weight: 850;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+}
+
+.quota-text strong [data-role="quota-cap"] {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.quota-boost {
+  margin-left: auto;
+  color: var(--brand);
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.quota-bar {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--surface-hover);
+  overflow: hidden;
+}
+
+.quota-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--brand);
+  border-radius: 999px;
+  transition: width 220ms ease;
+}
+
+.quota-bar-fill[data-full="true"] {
+  background: #dc2626;
+}
+
+.quota-bar-fill[data-unlimited="true"] {
+  background: linear-gradient(90deg, #f59e0b, #ef4444, #ec4899);
+}
+
 
 /* Review request prompt — shown after the user accumulates downloads */
 .review-prompt {

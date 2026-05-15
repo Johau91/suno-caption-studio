@@ -2,6 +2,25 @@ const STORAGE_KEY = 'sunoCaptionStudio.settings';
 const STATS_KEY = 'sunoCaptionStudio.stats';
 const UPDATE_INFO_KEY = 'sunoCaptionStudio.updateInfo';
 const REVIEW_PROMPT_KEY = 'sunoCaptionStudio.reviewPrompt';
+const QUOTA_KEY = 'sunoCaptionStudio.quota';
+
+function quotaCap(shareCount) {
+  const c = Number(shareCount) || 0;
+  if (c >= 10) return Infinity;
+  if (c >= 5) return 220;
+  if (c >= 2) return 70;
+  if (c >= 1) return 40;
+  return 20;
+}
+
+function normalizeQuota(raw) {
+  return {
+    isNewUser: Boolean(raw?.isNewUser),
+    shareCount: Number(raw?.shareCount) || 0,
+    downloadCount: Number(raw?.downloadCount) || 0,
+    installedAt: raw?.installedAt ?? null
+  };
+}
 const STORE_URL = 'https://chromewebstore.google.com/detail/bhmcpeaeeammcbcadpmkanfhfjklddkn';
 const REVIEW_URL = 'https://chromewebstore.google.com/detail/bhmcpeaeeammcbcadpmkanfhfjklddkn/reviews';
 const REVIEW_THRESHOLDS = [5, 25];
@@ -50,6 +69,11 @@ const reviewPromptTitle = document.querySelector('[data-role="review-prompt-titl
 const reviewPromptLeave = document.querySelector('[data-role="review-prompt-leave"]');
 const reviewPromptLater = document.querySelector('[data-role="review-prompt-later"]');
 const reviewPromptClose = document.querySelector('[data-role="review-prompt-close"]');
+const quotaRow = document.querySelector('[data-role="quota-row"]');
+const quotaCurrent = document.querySelector('[data-role="quota-current"]');
+const quotaCap_el = document.querySelector('[data-role="quota-cap"]');
+const quotaBoost = document.querySelector('[data-role="quota-boost"]');
+const quotaBarFill = document.querySelector('[data-role="quota-bar-fill"]');
 
 let currentLang = 'ko';
 let statusTimer = 0;
@@ -58,7 +82,7 @@ let toastTimer = 0;
 init();
 
 async function init() {
-  const result = await chrome.storage.local.get([STORAGE_KEY, UPDATE_INFO_KEY, STATS_KEY, REVIEW_PROMPT_KEY]);
+  const result = await chrome.storage.local.get([STORAGE_KEY, UPDATE_INFO_KEY, STATS_KEY, REVIEW_PROMPT_KEY, QUOTA_KEY]);
   const settings = normalizeSettings(result[STORAGE_KEY] || {});
 
   currentLang = window.SCS_I18N.normalizeLang(settings.language);
@@ -70,6 +94,7 @@ async function init() {
   showUpdateBannerIfNeeded(result[UPDATE_INFO_KEY]);
   showStats(result[STATS_KEY]);
   maybeShowReviewPrompt(result[STATS_KEY], result[REVIEW_PROMPT_KEY]);
+  showQuota(normalizeQuota(result[QUOTA_KEY]));
 
   for (const field of fields) {
     const eventName = field.tagName === 'INPUT' && field.type === 'text' ? 'input' : 'change';
@@ -132,6 +157,9 @@ async function init() {
     if (changes[STATS_KEY]) {
       showStats(changes[STATS_KEY].newValue);
     }
+    if (changes[QUOTA_KEY]) {
+      showQuota(normalizeQuota(changes[QUOTA_KEY].newValue));
+    }
     if (changes[STORAGE_KEY]?.newValue) {
       const next = changes[STORAGE_KEY].newValue;
       const lang = window.SCS_I18N.normalizeLang(next.language);
@@ -142,6 +170,58 @@ async function init() {
       applyTheme(normalizeTheme(next.theme));
     }
   });
+}
+
+function showQuota(quota) {
+  if (!quotaRow) return;
+  if (!quota?.isNewUser) {
+    quotaRow.hidden = true;
+    return;
+  }
+  const cap = quotaCap(quota.shareCount);
+  const downloads = quota.downloadCount || 0;
+  const isUnlimited = cap === Infinity;
+  const remaining = isUnlimited ? Infinity : Math.max(0, cap - downloads);
+
+  if (isUnlimited) {
+    quotaCurrent.textContent = window.SCS_I18N.t(currentLang, 'quota.unlimited');
+    quotaCap_el.textContent = '';
+    quotaBoost.textContent = '';
+    quotaBarFill.style.width = '100%';
+    quotaBarFill.dataset.unlimited = 'true';
+    quotaBarFill.dataset.full = 'false';
+  } else {
+    quotaCurrent.textContent = String(downloads);
+    quotaCap_el.textContent = `/${cap}`;
+    quotaBoost.textContent = remaining === 0
+      ? window.SCS_I18N.t(currentLang, 'quota.exhaustedHint')
+      : window.SCS_I18N.t(currentLang, 'quota.boost');
+    const pct = Math.min(100, (downloads / cap) * 100);
+    quotaBarFill.style.width = pct + '%';
+    quotaBarFill.dataset.unlimited = 'false';
+    quotaBarFill.dataset.full = String(remaining === 0);
+  }
+  quotaRow.hidden = false;
+}
+
+async function bumpShareCount() {
+  const result = await chrome.storage.local.get(QUOTA_KEY);
+  const quota = normalizeQuota(result[QUOTA_KEY]);
+  if (!quota.isNewUser) return; // grandfathered users don't get share boosts
+  const oldCap = quotaCap(quota.shareCount);
+  const newShareCount = quota.shareCount + 1;
+  const newCap = quotaCap(newShareCount);
+  await chrome.storage.local.set({
+    [QUOTA_KEY]: { ...quota, shareCount: newShareCount }
+  });
+  if (newCap !== oldCap) {
+    if (newCap === Infinity) {
+      showToast(window.SCS_I18N.t(currentLang, 'quota.tier.unlimited'));
+    } else {
+      const added = newCap - oldCap;
+      showToast(window.SCS_I18N.t(currentLang, 'quota.tier.boost', { added, total: newCap }));
+    }
+  }
 }
 
 function normalizeSettings(saved) {
@@ -296,6 +376,7 @@ function setSharePopoverOpen(open) {
 
 async function handleShare(target) {
   setSharePopoverOpen(false);
+  await bumpShareCount();
   const title = window.SCS_I18N.t(currentLang, 'docTitle');
   const text = window.SCS_I18N.t(currentLang, 'share.text');
 

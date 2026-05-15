@@ -1,14 +1,20 @@
 const STORAGE_KEY = 'sunoCaptionStudio.settings';
+const QUOTA_KEY = 'sunoCaptionStudio.quota';
 const THEMES = ['system', 'light', 'dark'];
 
 init();
 
 async function init() {
-  const result = await chrome.storage.local.get(STORAGE_KEY);
+  const result = await chrome.storage.local.get([STORAGE_KEY, QUOTA_KEY]);
   const settings = result[STORAGE_KEY] || {};
   const lang = window.SCS_I18N.normalizeLang(settings.language);
   applyTheme(normalizeTheme(settings.theme));
   window.SCS_I18N.apply(lang, { titleKey: 'welcome.docTitle' });
+
+  const quotaCard = document.querySelector('[data-role="welcome-quota"]');
+  if (quotaCard && result[QUOTA_KEY]?.isNewUser) {
+    quotaCard.hidden = false;
+  }
 
   document.querySelector('[data-action="open-suno"]')?.addEventListener('click', () => {
     chrome.tabs.create({ url: 'https://suno.com/' });

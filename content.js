@@ -1,7 +1,26 @@
 (() => {
   const STORAGE_KEY = 'sunoCaptionStudio.settings';
   const STATS_KEY = 'sunoCaptionStudio.stats';
+  const QUOTA_KEY = 'sunoCaptionStudio.quota';
   const FALLBACK_DURATION = 2.4;
+
+  function quotaCap(shareCount) {
+    const c = Number(shareCount) || 0;
+    if (c >= 10) return Infinity;
+    if (c >= 5) return 220;
+    if (c >= 2) return 70;
+    if (c >= 1) return 40;
+    return 20;
+  }
+
+  function normalizeQuota(raw) {
+    return {
+      isNewUser: Boolean(raw?.isNewUser),
+      shareCount: Number(raw?.shareCount) || 0,
+      downloadCount: Number(raw?.downloadCount) || 0,
+      installedAt: raw?.installedAt ?? null
+    };
+  }
   const state = {
     open: false,
     busy: false,
@@ -15,7 +34,8 @@
       includeMeta: true,
       cleanMode: 'strong',
       autoOpen: false
-    }
+    },
+    quota: { isNewUser: false, shareCount: 0, downloadCount: 0, installedAt: null }
   };
 
   let root;
@@ -42,21 +62,33 @@
   });
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local' || !changes[STORAGE_KEY]?.newValue) {
-      return;
+    if (area !== 'local') return;
+    if (changes[STORAGE_KEY]?.newValue) {
+      state.settings = { ...state.settings, ...changes[STORAGE_KEY].newValue };
+      renderSettings();
+      scheduleThumbnailPlacement();
     }
-
-    state.settings = { ...state.settings, ...changes[STORAGE_KEY].newValue };
-    renderSettings();
-    scheduleThumbnailPlacement();
+    if (changes[QUOTA_KEY]?.newValue) {
+      state.quota = normalizeQuota(changes[QUOTA_KEY].newValue);
+    }
   });
 
   async function init() {
     state.settings = { ...state.settings, ...(await readSettings()) };
+    state.quota = normalizeQuota(await readQuota());
     mount();
     resetForRoute();
     observePage();
     scheduleThumbnailPlacement();
+  }
+
+  async function readQuota() {
+    try {
+      const result = await chrome.storage.local.get(QUOTA_KEY);
+      return result?.[QUOTA_KEY] || {};
+    } catch {
+      return {};
+    }
   }
 
   function mount() {
@@ -498,6 +530,10 @@
       return;
     }
 
+    if (!checkQuotaOrWarn()) {
+      return;
+    }
+
     const songId = getSongIdFromLocation();
     if (!songId) {
       setStatus('Suno 곡 상세 페이지에서 사용할 수 있습니다.', 'error');
@@ -511,6 +547,15 @@
     if (state.lines.length) {
       saveFormat(format);
     }
+  }
+
+  function checkQuotaOrWarn() {
+    if (!state.quota?.isNewUser) return true;
+    const cap = quotaCap(state.quota.shareCount);
+    if (cap === Infinity) return true;
+    if ((state.quota.downloadCount || 0) < cap) return true;
+    setStatus(`다운로드 한도 ${cap}회 도달 — 확장 아이콘 → 공유하기로 더 받으세요.`, 'error');
+    return false;
   }
 
   function setOpen(open) {
@@ -758,14 +803,22 @@
 
   async function incrementDownloadCount() {
     try {
-      const result = await chrome.storage.local.get(STATS_KEY);
-      const current = Number(result?.[STATS_KEY]?.downloadCount ?? 0);
-      await chrome.storage.local.set({
+      const result = await chrome.storage.local.get([STATS_KEY, QUOTA_KEY]);
+      const stats = Number(result?.[STATS_KEY]?.downloadCount ?? 0);
+      const updates = {
         [STATS_KEY]: {
-          downloadCount: current + 1,
+          downloadCount: stats + 1,
           lastDownloadAt: Date.now()
         }
-      });
+      };
+      const quota = normalizeQuota(result?.[QUOTA_KEY]);
+      if (quota.isNewUser) {
+        updates[QUOTA_KEY] = {
+          ...quota,
+          downloadCount: quota.downloadCount + 1
+        };
+      }
+      await chrome.storage.local.set(updates);
     } catch {
       // Stats are best-effort; don't surface errors to the user.
     }
