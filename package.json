@@ -1,6 +1,6 @@
 {
   "name": "suno-caption-studio",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "A standalone Chrome extension for previewing, saving, and copying Suno synchronized captions.",
   "private": true,
   "scripts": {

@@ -14,26 +14,27 @@
           <span data-i18n="header.subtitle">썸네일 다운로드 버튼 기본값</span>
         </div>
         <div class="popup-header-actions">
-          <button type="button" class="header-pill header-pill-primary" data-action="open-suno" data-i18n="header.openSuno" data-i18n-attr="title" title="Suno 열기">
-            Suno 열기 ↗
+          <button type="button" class="header-icon-btn" data-action="open-suno"
+            data-i18n-title="header.openSuno" data-i18n-aria-label="header.openSuno"
+            title="Suno 열기" aria-label="Suno 열기">
+            <span class="header-icon header-icon-external" aria-hidden="true"></span>
           </button>
-          <div class="prefs-wrap">
-            <button type="button" class="header-icon-btn" data-action="toggle-prefs" aria-haspopup="true" aria-expanded="false" aria-controls="prefs-popover" data-i18n="prefs.label" data-i18n-attr="aria-label" aria-label="환경설정" title="환경설정">
-              <span class="header-icon header-icon-settings" aria-hidden="true"></span>
-            </button>
-            <div class="prefs-popover" id="prefs-popover" data-role="prefs-popover" role="dialog" aria-label="환경설정" hidden>
-              <div class="prefs-block">
-                <span class="prefs-label" data-i18n="prefs.language">언어 / Language</span>
-                <div class="lang-toggle" role="group" aria-label="Language">
-                  <button type="button" data-lang="ko" aria-pressed="true">KO</button>
-                  <button type="button" data-lang="en" aria-pressed="false">EN</button>
-                  <button type="button" data-lang="ja" aria-pressed="false">JA</button>
-                  <button type="button" data-lang="zh" aria-pressed="false">ZH</button>
-                  <button type="button" data-lang="es" aria-pressed="false">ES</button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <button type="button" class="header-icon-btn" data-action="share-extension"
+            data-i18n-title="share.title" data-i18n-aria-label="share.title"
+            title="친구에게 공유" aria-label="친구에게 공유">
+            <span class="header-icon header-icon-share" aria-hidden="true"></span>
+          </button>
+          <button type="button" class="header-icon-btn"
+            data-url="https://chromewebstore.google.com/detail/bhmcpeaeeammcbcadpmkanfhfjklddkn/reviews"
+            data-i18n-title="review.title" data-i18n-aria-label="review.title"
+            title="후기 공유하기" aria-label="후기 공유하기">
+            <span class="header-icon header-icon-review" aria-hidden="true"></span>
+          </button>
+          <button type="button" class="header-icon-btn" data-action="open-options"
+            data-i18n-title="prefs.label" data-i18n-aria-label="prefs.label"
+            title="환경설정" aria-label="환경설정">
+            <span class="header-icon header-icon-settings" aria-hidden="true"></span>
+          </button>
         </div>
       </header>
 
@@ -94,7 +95,7 @@
           <span class="stats-icon" aria-hidden="true">📥</span>
           <span data-i18n="stats.downloaded">지금까지</span>
           <strong data-role="stats-count">0</strong>
-          <span data-i18n="stats.unit">개 다운로드했어요</span>
+          <span data-i18n="stats.unit">개 가사를 저장했어요</span>
         </div>
 
         <p class="shortcut-hint" data-i18n="shortcut.hint">단축키: Alt + Shift + L (Suno 곡 페이지에서 즉시 다운로드)</p>
@@ -155,24 +156,11 @@
               <span>확장 프로그램 사용 문의와 피드백을 남겨주세요</span>
             </span>
           </button>
-          <button type="button" data-action="share-extension">
-            <span class="tool-icon tool-icon-share" aria-hidden="true"></span>
-            <span class="tool-copy">
-              <strong data-i18n="share.title">친구에게 공유 <span aria-hidden="true">↗</span></strong>
-              <span data-i18n="share.subtitle">설치 링크를 클립보드에 복사합니다</span>
-            </span>
-          </button>
-          <button type="button" data-url="https://chromewebstore.google.com/detail/bhmcpeaeeammcbcadpmkanfhfjklddkn/reviews">
-            <span class="tool-icon tool-icon-review" aria-hidden="true"></span>
-            <span class="tool-copy">
-              <strong data-i18n="review.title">후기 공유하기 <span aria-hidden="true">↗</span></strong>
-              <span data-i18n="review.subtitle">크롬 웹스토어에 별점과 후기를 남겨주세요</span>
-            </span>
-          </button>
         </div>
       </section>
     </main>
     <div class="toast" data-role="toast" hidden></div>
+    <script src="i18n.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

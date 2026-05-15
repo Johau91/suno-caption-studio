@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SUNO 가사 다운로더 — 환경설정</title>
+    <link rel="stylesheet" href="popup.css">
+    <link rel="stylesheet" href="options.css">
+  </head>
+  <body class="options-body">
+    <main class="options-shell">
+      <header class="options-header">
+        <div>
+          <strong data-i18n="prefs.pageTitle">환경설정</strong>
+          <span data-i18n="header.subtitle">썸네일 다운로드 버튼 기본값</span>
+        </div>
+      </header>
+
+      <section class="options-card">
+        <div class="options-card-title">
+          <strong data-i18n="prefs.language">언어 / Language</strong>
+          <p data-i18n="prefs.languageHint">팝업과 옵션 페이지의 표시 언어를 선택하세요. 설정은 자동 저장됩니다.</p>
+        </div>
+        <div class="lang-toggle" role="group" aria-label="Language">
+          <button type="button" data-lang="ko" aria-pressed="true">KO</button>
+          <button type="button" data-lang="en" aria-pressed="false">EN</button>
+          <button type="button" data-lang="ja" aria-pressed="false">JA</button>
+          <button type="button" data-lang="zh" aria-pressed="false">ZH</button>
+          <button type="button" data-lang="es" aria-pressed="false">ES</button>
+        </div>
+      </section>
+    </main>
+    <script src="i18n.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>
