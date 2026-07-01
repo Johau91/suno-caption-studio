@@ -3,10 +3,6 @@ const LICENSE_KEY = 'sunoCaptionStudio.license';
 const THEMES = ['system', 'light', 'dark'];
 const BULK_OUTPUTS = ['zip', 'merged'];
 
-// Purchase page (webwoori). Opens the 이용권 구매 페이지 where the user pays
-// (PayApp) and receives a license key. Phase 2 builds the real purchase flow.
-const PURCHASE_URL = 'https://webwoori.com/buy/suno-caption';
-
 // Only accept license keys issued for this app (our server sets meta.app).
 const EXPECTED_APP = 'suno-caption';
 
@@ -26,14 +22,23 @@ const licenseEls = {
   deactivate: document.querySelector('[data-role="license-deactivate"]'),
   msg: document.querySelector('[data-role="license-msg"]'),
   activateBtn: document.querySelector('[data-action="activate-license"]'),
-  buyBtn: document.querySelector('[data-action="open-checkout"]')
+  buyBtn: document.querySelector('[data-action="open-checkout"]'),
+  purchase: document.querySelector('[data-role="license-purchase"]'),
+  tiers: [...document.querySelectorAll('[data-tier]')],
+  phone: document.querySelector('[data-role="buy-phone"]'),
+  email: document.querySelector('[data-role="buy-email"]'),
+  payBtn: document.querySelector('[data-role="pay-btn"]')
 };
+
+const TIER_PRICE = { '1month': 2900, '1year': 9900, lifetime: 15600 };
 
 let currentLang = 'ko';
 let currentTheme = 'system';
 let currentBulkOutput = 'zip';
 let currentLicense = normalizeLicense(null);
 let licenseBusy = false;
+let selectedTier = '1year';
+let paymentPolling = false;
 
 init();
 
@@ -117,26 +122,141 @@ function isLicenseActive(license) {
 function setupLicenseUi() {
   licenseEls.activateBtn?.addEventListener('click', activateLicense);
   licenseEls.deactivate?.addEventListener('click', deactivateLicense);
+  // 구매 버튼 → 인라인 구매 폼(이용권/휴대폰/이메일) 토글.
   licenseEls.buyBtn?.addEventListener('click', () => {
-    if (!PURCHASE_URL) {
-      showLicenseMessage('구매 페이지가 아직 준비되지 않았습니다.', 'error');
-      return;
+    if (!licenseEls.purchase) return;
+    licenseEls.purchase.hidden = !licenseEls.purchase.hidden;
+    if (!licenseEls.purchase.hidden) {
+      licenseEls.phone?.focus();
     }
-    chrome.tabs.create({ url: PURCHASE_URL });
   });
+  if (licenseEls.buyBtn) {
+    licenseEls.buyBtn.textContent = PREMIUM_SUBSCRIBE_LABEL;
+  }
+
+  // 이용권 선택.
+  for (const tierBtn of licenseEls.tiers) {
+    tierBtn.addEventListener('click', () => selectTier(tierBtn.dataset.tier));
+  }
+  renderPayButton();
+
+  // 결제하기.
+  licenseEls.payBtn?.addEventListener('click', startPayment);
+
   licenseEls.input?.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') {
       activateLicense();
     }
   });
-  if (licenseEls.buyBtn) {
-    if (PURCHASE_URL) {
-      licenseEls.buyBtn.textContent = PREMIUM_SUBSCRIBE_LABEL;
-    } else {
-      licenseEls.buyBtn.disabled = true;
-      licenseEls.buyBtn.title = '구매 페이지 준비 중';
-    }
+}
+
+function selectTier(tier) {
+  if (!TIER_PRICE[tier]) return;
+  selectedTier = tier;
+  for (const btn of licenseEls.tiers) {
+    btn.dataset.selected = String(btn.dataset.tier === tier);
   }
+  renderPayButton();
+}
+
+function renderPayButton() {
+  if (!licenseEls.payBtn) return;
+  const price = TIER_PRICE[selectedTier] || 0;
+  licenseEls.payBtn.textContent = `₩${price.toLocaleString('ko-KR')} 결제하기`;
+}
+
+async function startPayment() {
+  if (paymentPolling) return;
+  const phone = (licenseEls.phone?.value || '').replace(/[^0-9]/g, '');
+  if (phone.length < 10 || phone.length > 11) {
+    showLicenseMessage('휴대폰 번호를 정확히 입력하세요.', 'error');
+    licenseEls.phone?.focus();
+    return;
+  }
+  const email = (licenseEls.email?.value || '').trim();
+
+  if (licenseEls.payBtn) licenseEls.payBtn.disabled = true;
+  showLicenseMessage('결제창을 여는 중…', '');
+  try {
+    const response = await new Promise((resolve) => {
+      chrome.runtime.sendMessage(
+        {
+          type: 'caption-studio:checkout',
+          payload: { tier: selectedTier, phone, email }
+        },
+        resolve
+      );
+    });
+    const data = response?.ok ? response.data : null;
+    if (!data?.ok || !data.payurl) {
+      throw new Error(data?.error || response?.error || '결제 요청에 실패했습니다.');
+    }
+    // 결제창을 팝업으로 (payurl = 페이앱/카드결제 바로).
+    openPaymentWindow(data.payurl);
+    showLicenseMessage('결제창에서 결제를 완료하세요. 완료되면 자동으로 활성화됩니다.', '');
+    pollForPayment(data.orderId);
+  } catch (error) {
+    showLicenseMessage(error instanceof Error ? error.message : '결제 요청 실패', 'error');
+    if (licenseEls.payBtn) licenseEls.payBtn.disabled = false;
+  }
+}
+
+function openPaymentWindow(payurl) {
+  // NICEPAY 결제창은 데스크톱 레이아웃(UA 기반)이라 넉넉한 폭이 필요.
+  if (chrome.windows?.create) {
+    chrome.windows.create({ url: payurl, type: 'popup', width: 820, height: 880 });
+  } else {
+    chrome.tabs.create({ url: payurl });
+  }
+}
+
+// 결제 완료를 폴링해서 라이선스 키를 받아 자동 활성화.
+async function pollForPayment(orderId) {
+  if (!orderId) return;
+  paymentPolling = true;
+  const maxTries = 120; // 약 6분 (3초 간격)
+  let tries = 0;
+
+  const tick = async () => {
+    tries += 1;
+    let data = null;
+    try {
+      const res = await new Promise((resolve) => {
+        chrome.runtime.sendMessage(
+          { type: 'caption-studio:order-status', orderId },
+          resolve
+        );
+      });
+      data = res?.ok ? res.data : null;
+    } catch {
+      // 무시하고 계속 폴링
+    }
+    if (data?.ok && data.status === 'paid' && data.licenseKey) {
+      paymentPolling = false;
+      if (licenseEls.payBtn) licenseEls.payBtn.disabled = false;
+      await activateWithKey(data.licenseKey);
+      return;
+    }
+    if (tries >= maxTries) {
+      paymentPolling = false;
+      if (licenseEls.payBtn) licenseEls.payBtn.disabled = false;
+      showLicenseMessage(
+        '결제 확인이 지연됩니다. 결제하셨다면 잠시 후 다시 시도하거나 이메일의 키로 활성화하세요.',
+        'error'
+      );
+      return;
+    }
+    window.setTimeout(tick, 3000);
+  };
+  window.setTimeout(tick, 3000);
+}
+
+// 결제로 받은 키를 입력칸에 채우고 활성화까지 자동 실행.
+async function activateWithKey(key) {
+  if (licenseEls.input) licenseEls.input.value = key;
+  showLicenseMessage('결제 완료! 프리미엄을 활성화하는 중…', 'ok');
+  await activateLicense();
+  if (licenseEls.purchase) licenseEls.purchase.hidden = true;
 }
 
 function renderLicense() {

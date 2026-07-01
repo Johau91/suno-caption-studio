@@ -206,8 +206,67 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === 'caption-studio:checkout') {
+    if (!sender.url || !sender.url.startsWith(chrome.runtime.getURL(''))) {
+      sendResponse({ ok: false, error: 'forbidden' });
+      return false;
+    }
+    requestCheckout(message.payload || {})
+      .then((data) => sendResponse({ ok: true, data }))
+      .catch((error) => {
+        sendResponse({
+          ok: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      });
+    return true;
+  }
+
+  if (message?.type === 'caption-studio:order-status') {
+    if (!sender.url || !sender.url.startsWith(chrome.runtime.getURL(''))) {
+      sendResponse({ ok: false, error: 'forbidden' });
+      return false;
+    }
+    fetchOrderStatus(message.orderId)
+      .then((data) => sendResponse({ ok: true, data }))
+      .catch((error) => {
+        sendResponse({
+          ok: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      });
+    return true;
+  }
+
   return false;
 });
+
+const CHECKOUT_URL = 'https://webwoori.com/api/payapp/checkout';
+const ORDER_STATUS_URL = 'https://webwoori.com/api/payapp/order';
+
+async function requestCheckout(payload) {
+  const response = await fetch(CHECKOUT_URL, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body: new URLSearchParams({
+      tier: payload.tier || '',
+      phone: payload.phone || '',
+      email: payload.email || ''
+    }).toString()
+  });
+  return response.json().catch(() => ({ ok: false, error: '응답 오류' }));
+}
+
+async function fetchOrderStatus(orderId) {
+  const response = await fetch(
+    `${ORDER_STATUS_URL}?order=${encodeURIComponent(orderId || '')}`,
+    { headers: { Accept: 'application/json' } }
+  );
+  return response.json().catch(() => ({ ok: false }));
+}
 
 // Self-hosted license API on webwoori. Mirrors the Lemon Squeezy License API
 // response shape (activated/valid/deactivated + license_key + instance + meta),

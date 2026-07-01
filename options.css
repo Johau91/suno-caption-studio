@@ -367,3 +367,82 @@
 .license-msg[data-tone="error"] {
   color: #dc2626;
 }
+
+/* 인라인 이용권 구매 폼 */
+.license-purchase {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.license-purchase[hidden] {
+  display: none;
+}
+
+.license-tiers {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.license-tier {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 10px 10px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--bg);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.license-tier[data-selected="true"] {
+  border-color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.license-tier-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+
+.license-tier-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.license-tier-price {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-strong);
+}
+
+.license-tier-sub {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.license-pay {
+  width: 100%;
+  height: 44px;
+}
+
+.license-purchase-note {
+  margin: 2px 0 0;
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+}

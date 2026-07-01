@@ -33,8 +33,34 @@
         </div>
 
         <div class="license-actions">
-          <button type="button" class="license-btn license-btn-buy" data-action="open-checkout" data-i18n="prefs.license.subscribe">구독하기</button>
+          <button type="button" class="license-btn license-btn-buy" data-action="open-checkout" data-i18n="prefs.license.subscribe">프리미엄 이용권 구매</button>
           <button type="button" class="license-btn license-btn-ghost" data-action="deactivate-license" data-role="license-deactivate" hidden data-i18n="prefs.license.deactivate">이 기기에서 비활성화</button>
+        </div>
+
+        <div class="license-purchase" data-role="license-purchase" hidden>
+          <div class="license-tiers" role="group" aria-label="이용권 선택">
+            <button type="button" class="license-tier" data-tier="1month">
+              <span class="license-tier-name">1개월</span>
+              <span class="license-tier-price">₩2,900</span>
+              <span class="license-tier-sub">30일</span>
+            </button>
+            <button type="button" class="license-tier" data-tier="1year" data-selected="true">
+              <span class="license-tier-badge">인기</span>
+              <span class="license-tier-name">1년</span>
+              <span class="license-tier-price">₩9,900</span>
+              <span class="license-tier-sub">365일</span>
+            </button>
+            <button type="button" class="license-tier" data-tier="lifetime">
+              <span class="license-tier-badge">최고가치</span>
+              <span class="license-tier-name">평생</span>
+              <span class="license-tier-price">₩15,600</span>
+              <span class="license-tier-sub">영구</span>
+            </button>
+          </div>
+          <input type="tel" inputmode="numeric" class="license-input" data-role="buy-phone" placeholder="휴대폰 번호 (숫자만, 예: 01012345678)" autocomplete="off">
+          <input type="email" class="license-input" data-role="buy-email" placeholder="이메일 (선택 · 라이선스 키 백업 발송)" autocomplete="off">
+          <button type="button" class="license-btn license-btn-buy license-pay" data-action="start-payment" data-role="pay-btn">₩9,900 결제하기</button>
+          <p class="license-purchase-note">카드 · 카카오페이 · 네이버페이 · 1회성 결제(자동결제 없음)</p>
         </div>
 
         <p class="license-msg" data-role="license-msg" hidden></p>
