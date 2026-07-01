@@ -880,6 +880,34 @@ input[type="text"]:focus {
   background: linear-gradient(90deg, #f59e0b, #ef4444, #ec4899);
 }
 
+.quota-premium-cta {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #ffffff;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.35);
+  transition: transform 120ms ease, filter 120ms ease;
+}
+
+.quota-premium-cta[hidden] {
+  display: none;
+}
+
+.quota-premium-cta:hover,
+.quota-premium-cta:focus-visible {
+  transform: translateY(-1px);
+  filter: brightness(1.06);
+  outline: none;
+}
+
 
 /* Review request prompt — shown after the user accumulates downloads */
 .review-prompt {

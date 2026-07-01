@@ -9,6 +9,7 @@ const zipPath = path.join(dist, 'suno-caption-studio.zip');
 const include = [
   'manifest.json',
   'background.js',
+  'zip.js',
   'content.js',
   'styles.css',
   'popup.html',

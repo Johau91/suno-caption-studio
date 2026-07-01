@@ -16,6 +16,30 @@
         </div>
       </header>
 
+      <section class="options-card license-card">
+        <div class="options-card-title">
+          <strong data-i18n="prefs.license.title">프리미엄 (다운로드 무제한)</strong>
+          <p data-i18n="prefs.license.hint">이용권(1개월·1년·평생)을 구매하면 다운로드 한도 없이 무제한으로 저장할 수 있습니다. 구매 후 받은 라이선스 키를 입력해 활성화하세요.</p>
+        </div>
+
+        <div class="license-status" data-role="license-status" data-state="free">
+          <span class="license-badge" data-role="license-badge">무료</span>
+          <span class="license-status-text" data-role="license-status-text">다운로드 한도가 적용됩니다.</span>
+        </div>
+
+        <div class="license-activate" data-role="license-activate">
+          <input type="text" class="license-input" data-role="license-input" placeholder="라이선스 키 입력 (예: XXXX-XXXX-XXXX-XXXX)" autocomplete="off" spellcheck="false">
+          <button type="button" class="license-btn license-btn-primary" data-action="activate-license" data-i18n="prefs.license.activate">활성화</button>
+        </div>
+
+        <div class="license-actions">
+          <button type="button" class="license-btn license-btn-buy" data-action="open-checkout" data-i18n="prefs.license.subscribe">구독하기</button>
+          <button type="button" class="license-btn license-btn-ghost" data-action="deactivate-license" data-role="license-deactivate" hidden data-i18n="prefs.license.deactivate">이 기기에서 비활성화</button>
+        </div>
+
+        <p class="license-msg" data-role="license-msg" hidden></p>
+      </section>
+
       <section class="options-card">
         <div class="options-card-title">
           <strong data-i18n="prefs.language">언어 / Language</strong>
@@ -39,6 +63,17 @@
           <button type="button" data-theme-choice="system" aria-pressed="true" data-i18n="theme.system">시스템</button>
           <button type="button" data-theme-choice="light" aria-pressed="false" data-i18n="theme.light">라이트</button>
           <button type="button" data-theme-choice="dark" aria-pressed="false" data-i18n="theme.dark">다크</button>
+        </div>
+      </section>
+
+      <section class="options-card">
+        <div class="options-card-title">
+          <strong data-i18n="prefs.bulkOutput.title">일괄 다운로드 저장 형태</strong>
+          <p data-i18n="prefs.bulkOutput.hint">플레이리스트 전체 가사를 받을 때 ZIP 파일로 묶을지, 하나의 텍스트로 합칠지 선택합니다.</p>
+        </div>
+        <div class="theme-toggle" role="group" aria-label="Bulk output">
+          <button type="button" data-bulk-output="zip" aria-pressed="true">ZIP</button>
+          <button type="button" data-bulk-output="merged" aria-pressed="false" data-i18n="prefs.bulkOutput.merged">합치기</button>
         </div>
       </section>
 

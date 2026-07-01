@@ -3,13 +3,18 @@ const STATS_KEY = 'sunoCaptionStudio.stats';
 const UPDATE_INFO_KEY = 'sunoCaptionStudio.updateInfo';
 const REVIEW_PROMPT_KEY = 'sunoCaptionStudio.reviewPrompt';
 const QUOTA_KEY = 'sunoCaptionStudio.quota';
+const LICENSE_KEY = 'sunoCaptionStudio.license';
 
-function quotaCap(shareCount) {
-  const c = Number(shareCount) || 0;
-  if (c >= 10) return Infinity;
-  if (c >= 5) return 220;
-  if (c >= 2) return 70;
-  if (c >= 1) return 40;
+let premiumActive = false;
+
+function isLicenseActive(raw) {
+  if (!raw?.valid) return false;
+  if (raw.expiresAt && Date.parse(raw.expiresAt) <= Date.now()) return false;
+  return true;
+}
+
+function quotaCap() {
+  // Fixed display cap of 20. Sharing refills usage rather than raising it.
   return 20;
 }
 
@@ -74,6 +79,7 @@ const quotaCurrent = document.querySelector('[data-role="quota-current"]');
 const quotaCap_el = document.querySelector('[data-role="quota-cap"]');
 const quotaBoost = document.querySelector('[data-role="quota-boost"]');
 const quotaBarFill = document.querySelector('[data-role="quota-bar-fill"]');
+const quotaPremiumCta = document.querySelector('[data-role="quota-premium-cta"]');
 
 let currentLang = 'ko';
 let statusTimer = 0;
@@ -82,8 +88,9 @@ let toastTimer = 0;
 init();
 
 async function init() {
-  const result = await chrome.storage.local.get([STORAGE_KEY, UPDATE_INFO_KEY, STATS_KEY, REVIEW_PROMPT_KEY, QUOTA_KEY]);
+  const result = await chrome.storage.local.get([STORAGE_KEY, UPDATE_INFO_KEY, STATS_KEY, REVIEW_PROMPT_KEY, QUOTA_KEY, LICENSE_KEY]);
   const settings = normalizeSettings(result[STORAGE_KEY] || {});
+  premiumActive = isLicenseActive(result[LICENSE_KEY]);
 
   currentLang = window.SCS_I18N.normalizeLang(settings.language);
   applyTheme(normalizeTheme(settings.theme));
@@ -146,6 +153,16 @@ async function init() {
     window.close();
   });
 
+  quotaPremiumCta?.addEventListener('click', () => {
+    // Send users to the options page where they can subscribe and enter the key.
+    if (chrome.runtime.openOptionsPage) {
+      chrome.runtime.openOptionsPage();
+    } else {
+      chrome.tabs.create({ url: chrome.runtime.getURL('options.html') });
+    }
+    window.close();
+  });
+
 
   updateDismissButton?.addEventListener('click', dismissUpdateBanner);
   reviewPromptLeave?.addEventListener('click', () => handleReviewPrompt('leave'));
@@ -157,8 +174,11 @@ async function init() {
     if (changes[STATS_KEY]) {
       showStats(changes[STATS_KEY].newValue);
     }
-    if (changes[QUOTA_KEY]) {
-      showQuota(normalizeQuota(changes[QUOTA_KEY].newValue));
+    if (changes[LICENSE_KEY]) {
+      premiumActive = isLicenseActive(changes[LICENSE_KEY].newValue);
+    }
+    if (changes[QUOTA_KEY] || changes[LICENSE_KEY]) {
+      chrome.storage.local.get(QUOTA_KEY).then((r) => showQuota(normalizeQuota(r[QUOTA_KEY])));
     }
     if (changes[STORAGE_KEY]?.newValue) {
       const next = changes[STORAGE_KEY].newValue;
@@ -174,54 +194,53 @@ async function init() {
 
 function showQuota(quota) {
   if (!quotaRow) return;
+  if (premiumActive) {
+    quotaRow.hidden = true;
+    return;
+  }
   if (!quota?.isNewUser) {
     quotaRow.hidden = true;
     return;
   }
   const cap = quotaCap(quota.shareCount);
-  const downloads = quota.downloadCount || 0;
-  const isUnlimited = cap === Infinity;
-  const remaining = isUnlimited ? Infinity : Math.max(0, cap - downloads);
+  // Refill model: each share credits back 10 downloads.
+  const used = effectiveDownloads(quota);
+  const remaining = Math.max(0, cap - used);
 
-  if (isUnlimited) {
-    quotaCurrent.textContent = window.SCS_I18N.t(currentLang, 'quota.unlimited');
-    quotaCap_el.textContent = '';
-    quotaBoost.textContent = '';
-    quotaBarFill.style.width = '100%';
-    quotaBarFill.dataset.unlimited = 'true';
-    quotaBarFill.dataset.full = 'false';
-  } else {
-    quotaCurrent.textContent = String(downloads);
-    quotaCap_el.textContent = `/${cap}`;
-    quotaBoost.textContent = remaining === 0
-      ? window.SCS_I18N.t(currentLang, 'quota.exhaustedHint')
-      : window.SCS_I18N.t(currentLang, 'quota.boost');
-    const pct = Math.min(100, (downloads / cap) * 100);
-    quotaBarFill.style.width = pct + '%';
-    quotaBarFill.dataset.unlimited = 'false';
-    quotaBarFill.dataset.full = String(remaining === 0);
+  quotaCurrent.textContent = String(Math.min(used, cap));
+  quotaCap_el.textContent = `/${cap}`;
+  // Sharing always credits +10, so it always helps when the limit is hit.
+  quotaBoost.textContent = remaining > 0
+    ? window.SCS_I18N.t(currentLang, 'quota.boost')
+    : window.SCS_I18N.t(currentLang, 'quota.exhaustedHint');
+  const pct = Math.min(100, (used / cap) * 100);
+  quotaBarFill.style.width = pct + '%';
+  quotaBarFill.dataset.unlimited = 'false';
+  quotaBarFill.dataset.full = String(remaining === 0);
+
+  // Surface the premium upsell once the free quota is used up.
+  if (quotaPremiumCta) {
+    quotaPremiumCta.hidden = remaining > 0;
   }
   quotaRow.hidden = false;
+}
+
+// quota.downloadCount is the current usage balance (+1 per download, -10 per
+// share, clamped at 0 so credit never banks).
+function effectiveDownloads(quota) {
+  return Math.max(0, Number(quota?.downloadCount) || 0);
 }
 
 async function bumpShareCount() {
   const result = await chrome.storage.local.get(QUOTA_KEY);
   const quota = normalizeQuota(result[QUOTA_KEY]);
-  if (!quota.isNewUser) return; // grandfathered users don't get share boosts
-  const oldCap = quotaCap(quota.shareCount);
-  const newShareCount = quota.shareCount + 1;
-  const newCap = quotaCap(newShareCount);
+  if (!quota.isNewUser) return; // grandfathered users don't get share credits
+  // Refund 10 from the usage balance, clamped at 0 (no banking below zero).
+  const refunded = Math.max(0, (quota.downloadCount || 0) - 10);
   await chrome.storage.local.set({
-    [QUOTA_KEY]: { ...quota, shareCount: newShareCount }
+    [QUOTA_KEY]: { ...quota, downloadCount: refunded, shareCount: (quota.shareCount || 0) + 1 }
   });
-  if (newCap !== oldCap) {
-    if (newCap === Infinity) {
-      showToast(window.SCS_I18N.t(currentLang, 'quota.tier.unlimited'));
-    } else {
-      const added = newCap - oldCap;
-      showToast(window.SCS_I18N.t(currentLang, 'quota.tier.boost', { added, total: newCap }));
-    }
-  }
+  showToast(window.SCS_I18N.t(currentLang, 'quota.tier.refill'));
 }
 
 function normalizeSettings(saved) {

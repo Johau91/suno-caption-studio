@@ -2,15 +2,40 @@
   const STORAGE_KEY = 'sunoCaptionStudio.settings';
   const STATS_KEY = 'sunoCaptionStudio.stats';
   const QUOTA_KEY = 'sunoCaptionStudio.quota';
+  const LICENSE_KEY = 'sunoCaptionStudio.license';
   const FALLBACK_DURATION = 2.4;
 
-  function quotaCap(shareCount) {
-    const c = Number(shareCount) || 0;
-    if (c >= 10) return Infinity;
-    if (c >= 5) return 220;
-    if (c >= 2) return 70;
-    if (c >= 1) return 40;
+  function normalizeLicense(raw) {
+    return {
+      key: raw?.key || '',
+      instanceId: raw?.instanceId || '',
+      valid: Boolean(raw?.valid),
+      status: raw?.status || '',
+      expiresAt: raw?.expiresAt || null
+    };
+  }
+
+  function isPremium() {
+    const lic = state.license;
+    if (!lic?.valid) {
+      return false;
+    }
+    if (lic.expiresAt && Date.parse(lic.expiresAt) <= Date.now()) {
+      return false;
+    }
+    return true;
+  }
+
+  function quotaCap() {
+    // Fixed display cap of 20. Sharing refills usage rather than raising it.
     return 20;
+  }
+
+  // quota.downloadCount is the current usage balance: +1 per download, -10 per
+  // share (applied when sharing, clamped at 0 so credit never banks). Premium
+  // removes the limit entirely.
+  function effectiveDownloads(quota) {
+    return Math.max(0, Number(quota?.downloadCount) || 0);
   }
 
   function normalizeQuota(raw) {
@@ -33,13 +58,22 @@
       customPattern: '{title}-{songId}',
       includeMeta: true,
       cleanMode: 'strong',
-      autoOpen: false
+      autoOpen: false,
+      bulkOutput: 'zip'
     },
-    quota: { isNewUser: false, shareCount: 0, downloadCount: 0, installedAt: null }
+    quota: { isNewUser: false, shareCount: 0, downloadCount: 0, installedAt: null },
+    license: { key: '', instanceId: '', valid: false, status: '', expiresAt: null }
   };
 
   let root;
   let downloadGroup;
+  let bulkPanel;
+  let bulkFab;
+  let bulkEls = {};
+  let bulkBusy = false;
+  let bulkAbort = false;
+  let bulkShowStatus = false;
+  let bulkHideTimer = 0;
   let els = {};
   let routeTimer = 0;
   let thumbnailTimer = 0;
@@ -49,6 +83,9 @@
 
   chrome.runtime.onMessage.addListener((message) => {
     if (message?.type === 'caption-studio:navigation') {
+      if (bulkBusy) {
+        bulkAbort = true;
+      }
       window.clearTimeout(routeTimer);
       routeTimer = window.setTimeout(() => {
         resetForRoute();
@@ -71,11 +108,15 @@
     if (changes[QUOTA_KEY]?.newValue) {
       state.quota = normalizeQuota(changes[QUOTA_KEY].newValue);
     }
+    if (changes[LICENSE_KEY]) {
+      state.license = normalizeLicense(changes[LICENSE_KEY].newValue);
+    }
   });
 
   async function init() {
     state.settings = { ...state.settings, ...(await readSettings()) };
     state.quota = normalizeQuota(await readQuota());
+    state.license = normalizeLicense(await readLicense());
     mount();
     resetForRoute();
     observePage();
@@ -86,6 +127,15 @@
     try {
       const result = await chrome.storage.local.get(QUOTA_KEY);
       return result?.[QUOTA_KEY] || {};
+    } catch {
+      return {};
+    }
+  }
+
+  async function readLicense() {
+    try {
+      const result = await chrome.storage.local.get(LICENSE_KEY);
+      return result?.[LICENSE_KEY] || {};
     } catch {
       return {};
     }
@@ -174,6 +224,7 @@
       downloadFromThumbnail(button.dataset.format);
     });
     document.body.appendChild(downloadGroup);
+    mountBulkPanel();
 
     els = {
       status: root.querySelector('[data-role="status"]'),
@@ -231,7 +282,10 @@
 
   function scheduleThumbnailPlacement() {
     window.clearTimeout(thumbnailTimer);
-    thumbnailTimer = window.setTimeout(placeThumbnailButton, 120);
+    thumbnailTimer = window.setTimeout(() => {
+      placeThumbnailButton();
+      placeBulkButton();
+    }, 120);
   }
 
   function placeThumbnailButton() {
@@ -240,267 +294,359 @@
     }
 
     const songId = getSongIdFromLocation();
-    const anchor = songId ? findLyricsAnchor() : null;
-    if (!anchor?.parentElement) {
+    const cover = songId ? findSongCover() : null;
+    if (!cover) {
       downloadGroup.hidden = true;
       return;
     }
 
-    if (downloadGroup.parentElement !== anchor.parentElement || downloadGroup.nextElementSibling !== anchor) {
-      anchor.parentElement.insertBefore(downloadGroup, anchor);
-    }
-
+    // Overlay the buttons inside the top-left corner of the song cover image,
+    // using document coordinates so they scroll naturally with the page.
+    const rect = cover.getBoundingClientRect();
+    const inset = 8;
     downloadGroup.hidden = false;
+    downloadGroup.style.left = `${window.scrollX + rect.left + inset}px`;
+    downloadGroup.style.top = `${window.scrollY + rect.top + inset}px`;
+
     downloadGroup.dataset.busy = String(state.busy);
     for (const button of downloadGroup.querySelectorAll('button')) {
       button.disabled = state.busy;
     }
   }
 
-  function findLyricsAnchor() {
-    const heading = findSongHeading();
-    const scope = document.querySelector('main') || document.body;
-    const candidates = [...scope.querySelectorAll('*')]
-      .map((node) => {
-        if (node.closest('#suno-caption-studio-root, .scs-download-group')) {
-          return null;
-        }
-        if (node.matches('button, a, input, textarea, select, svg, path')) {
-          return null;
-        }
-
-        const text = normalizeText(node.textContent);
-        if (!text || !/\[[^\]]+\]/.test(text)) {
-          return null;
-        }
-
-        const rect = node.getBoundingClientRect();
-        const style = window.getComputedStyle(node);
-        const visible = style.display !== 'none' &&
-          style.visibility !== 'hidden' &&
-          rect.width >= 80 &&
-          rect.height >= 12 &&
-          rect.left < window.innerWidth * 0.72 &&
-          (!heading || rect.top > heading.rect.bottom);
-
-        if (!visible) {
-          return null;
-        }
-
-        const lineCount = text.split('\n').filter(Boolean).length;
-        const area = rect.width * rect.height;
-        const sectionStart = /^\[[^\]]+\]/.test(text) ? 100000 : 0;
-        return {
-          node: findBlockAnchor(node),
-          score: sectionStart - area + lineCount * 2000 - rect.top
-        };
-      })
-      .filter(Boolean)
-      .sort((a, b) => b.score - a.score);
-
-    return candidates[0]?.node || null;
-  }
-
-  function findBlockAnchor(node) {
-    let current = node;
-    for (let depth = 0; current?.parentElement && depth < 5; depth += 1) {
-      const display = window.getComputedStyle(current).display;
-      if (display !== 'inline' && display !== 'contents') {
-        return current;
-      }
-      current = current.parentElement;
+  function findSongCover() {
+    const byAlt = document.querySelector('img[alt="Song Cover Image"]');
+    if (byAlt) {
+      return byAlt;
     }
-    return current || node;
-  }
-
-  function findSongActionRowRect() {
-    const heading = findSongHeading();
-    if (!heading) {
-      return null;
-    }
-
-    const buttons = [...document.querySelectorAll('button, [role="button"]')]
-      .map((button) => {
-        if (button.closest('#suno-caption-studio-root, .scs-download-group')) {
-          return null;
-        }
-
-        const rect = button.getBoundingClientRect();
-        const style = window.getComputedStyle(button);
-        const visible = style.display !== 'none' &&
-          style.visibility !== 'hidden' &&
-          rect.width >= 20 &&
-          rect.width <= 58 &&
-          rect.height >= 20 &&
-          rect.height <= 58 &&
-          rect.left > heading.rect.left - 24 &&
-          rect.left < window.innerWidth * 0.78 &&
-          rect.top > heading.rect.bottom + 30 &&
-          rect.top < heading.rect.bottom + 190;
-
-        return visible ? { rect: freezeRect(rect) } : null;
-      })
-      .filter(Boolean)
-      .sort((a, b) => a.rect.top - b.rect.top || a.rect.left - b.rect.left);
-
-    const rows = [];
-    for (const button of buttons) {
-      const row = rows.find((item) => Math.abs(item.top - button.rect.top) <= 8);
-      if (row) {
-        row.items.push(button.rect);
-        row.top = Math.min(row.top, button.rect.top);
-      } else {
-        rows.push({ top: button.rect.top, items: [button.rect] });
-      }
-    }
-
-    const row = rows
-      .filter((item) => item.items.length >= 3)
-      .sort((a, b) => a.top - b.top)[0];
-
-    if (!row) {
-      return null;
-    }
-
-    const left = Math.min(...row.items.map((item) => item.left));
-    const right = Math.max(...row.items.map((item) => item.right));
-    const top = Math.min(...row.items.map((item) => item.top));
-    const bottom = Math.max(...row.items.map((item) => item.bottom));
-    return {
-      left,
-      right,
-      top,
-      bottom,
-      width: right - left,
-      height: bottom - top
-    };
-  }
-
-  function findSongThumbnailRect() {
-    const candidates = [];
-
+    // Fallback: the largest image in the upper-left of the page.
+    let best = null;
+    let bestArea = 0;
     for (const image of document.images) {
-      addThumbnailCandidate(candidates, image, 20000);
-    }
-
-    for (const node of document.querySelectorAll('[style*="background-image"]')) {
-      addThumbnailCandidate(candidates, node, 15000);
-    }
-
-    for (const node of document.querySelectorAll('button, a, div, span')) {
-      const label = normalizeText(`${node.textContent || ''} ${node.getAttribute('aria-label') || ''} ${node.title || ''}`);
-      if (!/(^|\s)(Edit|편집)(\s|$)/.test(label)) {
-        continue;
-      }
-      let parent = node.parentElement;
-      for (let depth = 0; parent && depth < 7; depth += 1) {
-        addThumbnailCandidate(candidates, parent, 25000 - depth * 700);
-        parent = parent.parentElement;
+      const rect = image.getBoundingClientRect();
+      const aspect = rect.width / Math.max(1, rect.height);
+      const inUpperLeft = rect.top < window.innerHeight * 0.7 && rect.left < window.innerWidth * 0.55;
+      if (rect.width >= 96 && aspect >= 0.5 && aspect <= 1.4 && inUpperLeft) {
+        const area = rect.width * rect.height;
+        if (area > bestArea) {
+          bestArea = area;
+          best = image;
+        }
       }
     }
-
-    for (const node of document.querySelectorAll('main *')) {
-      addThumbnailCandidate(candidates, node, -12000);
-    }
-
-    candidates.sort((a, b) => b.score - a.score);
-    return candidates[0]?.rect || fallbackThumbnailRect() || fixedThumbnailRect();
+    return best;
   }
 
-  function addThumbnailCandidate(candidates, node, bonus) {
-    if (!node || node.closest('#suno-caption-studio-root')) {
-      return;
+  function mountBulkPanel() {
+    // Circular launcher button, overlaid on the playlist cover thumbnail.
+    // Clicking it downloads every song's lyrics directly (no popover).
+    bulkFab = document.createElement('button');
+    bulkFab.type = 'button';
+    bulkFab.className = 'scs-bulk-fab';
+    bulkFab.hidden = true;
+    bulkFab.setAttribute('aria-label', '플레이리스트 전체 가사 다운로드');
+    bulkFab.title = '플레이리스트 전체 가사 다운로드';
+    // Circular progress ring drawn around the icon while downloading.
+    const ringNS = 'http://www.w3.org/2000/svg';
+    const ring = document.createElementNS(ringNS, 'svg');
+    ring.setAttribute('class', 'scs-bulk-ring');
+    ring.setAttribute('viewBox', '0 0 40 40');
+    ring.setAttribute('aria-hidden', 'true');
+    const ringTrack = document.createElementNS(ringNS, 'circle');
+    ringTrack.setAttribute('class', 'scs-bulk-ring-track');
+    ringTrack.setAttribute('cx', '20');
+    ringTrack.setAttribute('cy', '20');
+    ringTrack.setAttribute('r', '18');
+    const ringFill = document.createElementNS(ringNS, 'circle');
+    ringFill.setAttribute('class', 'scs-bulk-ring-fill');
+    ringFill.setAttribute('cx', '20');
+    ringFill.setAttribute('cy', '20');
+    ringFill.setAttribute('r', '18');
+    ring.appendChild(ringTrack);
+    ring.appendChild(ringFill);
+    bulkFab.appendChild(ring);
+
+    const fabIcon = document.createElement('img');
+    fabIcon.className = 'scs-bulk-fab-icon';
+    fabIcon.alt = '';
+    try {
+      fabIcon.src = chrome.runtime.getURL('icons/icon48.png');
+    } catch {
+      // getURL can throw if the extension context is gone; ignore.
     }
-
-    const rect = node.getBoundingClientRect();
-    const style = window.getComputedStyle(node);
-    const width = rect.width;
-    const height = rect.height;
-    const aspect = width / Math.max(1, height);
-    const visible = style.display !== 'none' &&
-      style.visibility !== 'hidden' &&
-      style.opacity !== '0' &&
-      width >= 96 &&
-      height >= 96 &&
-      width <= 360 &&
-      height <= 360 &&
-      aspect >= 0.72 &&
-      aspect <= 1.38 &&
-      rect.right > 0 &&
-      rect.left < window.innerWidth * 0.55 &&
-      rect.bottom > 0 &&
-      rect.top < window.innerHeight * 0.72;
-
-    if (!visible) {
-      return;
-    }
-
-    const leftScore = Math.max(0, window.innerWidth * 0.42 - rect.left) * 80;
-    const topScore = Math.max(0, window.innerHeight * 0.48 - rect.top) * 36;
-    candidates.push({
-      rect: freezeRect(rect),
-      score: width * height + leftScore + topScore + bonus - Math.abs(width - height) * 140
+    bulkFab.appendChild(fabIcon);
+    bulkFab.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      bulkDownload();
     });
+    document.body.appendChild(bulkFab);
+
+    // Transient status bubble shown next to the launcher during/after download.
+    bulkPanel = document.createElement('div');
+    bulkPanel.className = 'scs-bulk-status-bubble';
+    bulkPanel.hidden = true;
+    bulkPanel.innerHTML = `<span class="scs-bulk-status" data-role="bulk-status"></span>`;
+    document.body.appendChild(bulkPanel);
+
+    bulkEls = {
+      status: bulkPanel.querySelector('[data-role="bulk-status"]'),
+      ring,
+      ringFill
+    };
   }
 
-  function fallbackThumbnailRect() {
-    const heading = findSongHeading();
+  const RING_CIRCUMFERENCE = 2 * Math.PI * 18;
 
-    if (!heading) {
-      return null;
+  function setRing(pct, indeterminate) {
+    if (!bulkEls.ringFill || !bulkEls.ring) {
+      return;
+    }
+    bulkEls.ringFill.style.strokeDasharray = String(RING_CIRCUMFERENCE);
+    if (indeterminate) {
+      bulkEls.ring.classList.add('is-indeterminate');
+      bulkEls.ringFill.style.strokeDashoffset = String(RING_CIRCUMFERENCE * 0.75);
+    } else {
+      bulkEls.ring.classList.remove('is-indeterminate');
+      const clamped = Math.max(0, Math.min(100, pct));
+      bulkEls.ringFill.style.strokeDashoffset = String(RING_CIRCUMFERENCE * (1 - clamped / 100));
+    }
+  }
+
+  function findPlaylistCover() {
+    const byAlt = document.querySelector('img[alt="Playlist cover art"]');
+    if (byAlt) {
+      return byAlt;
+    }
+    // Fallback: the largest near-square image in the upper-left of the page.
+    let best = null;
+    let bestArea = 0;
+    for (const image of document.images) {
+      const rect = image.getBoundingClientRect();
+      const aspect = rect.width / Math.max(1, rect.height);
+      const inUpperLeft = rect.top < window.innerHeight * 0.6 && rect.left < window.innerWidth * 0.5;
+      if (rect.width >= 96 && aspect >= 0.8 && aspect <= 1.25 && inUpperLeft) {
+        const area = rect.width * rect.height;
+        if (area > bestArea) {
+          bestArea = area;
+          best = image;
+        }
+      }
+    }
+    return best;
+  }
+
+  function placeBulkButton() {
+    if (!bulkFab || !bulkPanel) {
+      return;
     }
 
-    const size = 154;
-    const left = Math.max(72, heading.rect.left - size - 18);
-    const top = Math.max(72, heading.rect.top - 10);
-    return {
-      left,
-      top,
-      right: left + size,
-      bottom: top + size,
-      width: size,
-      height: size
-    };
+    const isPlaylist = Boolean(getPlaylistIdFromLocation());
+    const cover = isPlaylist ? findPlaylistCover() : null;
+    if (!cover) {
+      bulkFab.hidden = true;
+      bulkPanel.hidden = true;
+      return;
+    }
+
+    const rect = cover.getBoundingClientRect();
+    const inset = 8;
+
+    // Launcher sits inside the top-left corner of the cover.
+    bulkFab.hidden = false;
+    bulkFab.style.left = `${window.scrollX + rect.left + inset}px`;
+    bulkFab.style.top = `${window.scrollY + rect.top + inset}px`;
+    bulkFab.dataset.busy = String(bulkBusy);
+
+    // Status bubble (only while downloading or briefly after) opens to the
+    // right of the cover, in the empty area.
+    bulkPanel.hidden = !(bulkBusy || bulkShowStatus);
+    if (!bulkPanel.hidden) {
+      bulkPanel.style.left = `${window.scrollX + rect.right + 12}px`;
+      bulkPanel.style.top = `${window.scrollY + rect.top}px`;
+    }
   }
 
-  function findSongHeading() {
-    return [...document.querySelectorAll('h1, [role="heading"]')]
-      .map((node) => ({
-        node,
-        rect: freezeRect(node.getBoundingClientRect()),
-        text: normalizeText(node.textContent)
-      }))
-      .find((item) => item.text &&
-        item.rect.left > 120 &&
-        item.rect.top > 20 &&
-        item.rect.top < window.innerHeight * 0.4 &&
-        item.rect.width > 120) || null;
+  function setBulkBusy(busy) {
+    bulkBusy = busy;
+    if (bulkFab) {
+      bulkFab.dataset.busy = String(busy);
+    }
   }
 
-  function fixedThumbnailRect() {
-    const sidebar = window.innerWidth < 700 ? 16 : 64;
-    const size = window.innerWidth < 700 ? 128 : 156;
-    const left = Math.min(Math.max(sidebar + 10, 54), Math.max(54, window.innerWidth - size - 24));
-    const top = window.innerWidth < 700 ? 84 : 28;
-    return {
-      left,
-      top,
-      right: left + size,
-      bottom: top + size,
-      width: size,
-      height: size
-    };
+  // Ring-only progress update. indeterminate=true spins (unknown total).
+  function setBulkRing(done, total, indeterminate = false) {
+    const pct = total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
+    setRing(pct, indeterminate);
   }
 
-  function freezeRect(rect) {
-    return {
-      left: rect.left,
-      top: rect.top,
-      right: rect.right,
-      bottom: rect.bottom,
-      width: rect.width,
-      height: rect.height
-    };
+  // Text bubble used only when there's something to tell the user (errors or
+  // partial results). A clean success shows nothing — the filled ring is enough.
+  function showBulkMessage(message) {
+    if (bulkHideTimer) {
+      window.clearTimeout(bulkHideTimer);
+      bulkHideTimer = 0;
+    }
+    if (bulkEls.status) {
+      bulkEls.status.textContent = message;
+    }
+    bulkShowStatus = true;
+    placeBulkButton();
+    bulkHideTimer = window.setTimeout(() => {
+      bulkShowStatus = false;
+      bulkHideTimer = 0;
+      placeBulkButton();
+    }, 4500);
+  }
+
+  async function bulkDownload() {
+    if (bulkBusy) {
+      return;
+    }
+    const playlistId = getPlaylistIdFromLocation();
+    if (!playlistId) {
+      return;
+    }
+
+    const token = readCookie('__session');
+    if (!token) {
+      showBulkMessage('Suno 로그인 세션을 찾지 못했습니다.');
+      return;
+    }
+
+    if (!isPremium() && state.quota?.isNewUser) {
+      const cap = quotaCap(state.quota.shareCount);
+      if (effectiveDownloads(state.quota) >= cap) {
+        showBulkMessage(`다운로드 한도 ${cap}회 도달 — 공유 또는 프리미엄 구독으로 무제한.`);
+        return;
+      }
+    }
+
+    bulkAbort = false;
+    setBulkBusy(true);
+    setBulkRing(0, 0, true);
+
+    try {
+      const listResponse = await sendMessage({
+        type: 'caption-studio:load-playlist',
+        playlistId,
+        token
+      }, 120000);
+      if (!listResponse?.ok) {
+        throw new Error(listResponse?.error || '플레이리스트를 불러오지 못했습니다.');
+      }
+
+      const playlistName = listResponse.playlist?.name || 'suno-playlist';
+      let clips = listResponse.playlist?.clips || [];
+      if (!clips.length) {
+        setBulkBusy(false);
+        showBulkMessage('플레이리스트에 곡이 없습니다.');
+        return;
+      }
+
+      // Respect remaining quota for new users by trimming the batch.
+      let quotaTrimmed = false;
+      if (!isPremium() && state.quota?.isNewUser) {
+        const cap = quotaCap(state.quota.shareCount);
+        const remaining = Math.max(0, cap - effectiveDownloads(state.quota));
+        if (clips.length > remaining) {
+          clips = clips.slice(0, remaining);
+          quotaTrimmed = true;
+        }
+      }
+
+      const total = clips.length;
+      const width = String(total).length;
+      const format = state.settings.format || 'lrc';
+      const files = [];
+      let failures = 0;
+
+      for (let index = 0; index < clips.length; index += 1) {
+        if (bulkAbort) {
+          break;
+        }
+        const clip = clips[index];
+        setBulkRing(index, total);
+        try {
+          const response = await sendMessage({
+            type: 'caption-studio:load',
+            songId: clip.id,
+            token
+          }, 30000);
+          if (!response?.ok) {
+            throw new Error(response?.error || 'load failed');
+          }
+          const parsed = parseCaptionPayload(response.payload, clip.id);
+          const title = clip.title ? cleanTitle(clip.title) : (parsed.title || clip.id);
+          if (!parsed.lines.length) {
+            failures += 1;
+            continue;
+          }
+          const ctx = { lines: parsed.lines, title, songId: clip.id };
+          const content = renderExport(format, ctx);
+          // Bulk files use the title only (the numeric prefix already keeps them
+          // ordered and unique), so the song-ID UUID never ends up in the name.
+          const baseName = slugify(title) || slugify(clip.id) || 'suno-caption';
+          const name = `${pad(index + 1, width)} ${baseName}.${format}`;
+          files.push({ name, content, title });
+        } catch {
+          failures += 1;
+        }
+      }
+
+      if (bulkAbort) {
+        return;
+      }
+
+      if (!files.length) {
+        setBulkBusy(false);
+        showBulkMessage('저장할 가사를 찾지 못했습니다.');
+        return;
+      }
+
+      setBulkRing(total, total);
+      const safeName = slugify(playlistName) || 'suno-playlist';
+
+      if (state.settings.bulkOutput === 'merged') {
+        const merged = files
+          .map((file) => `${'='.repeat(8)} ${file.title} ${'='.repeat(8)}\n${file.content}`)
+          .join('\n\n');
+        downloadText(merged, `${safeName}.${format}`, mimeFor(format));
+      } else {
+        if (!window.SCS_ZIP) {
+          throw new Error('ZIP 모듈을 불러오지 못했습니다.');
+        }
+        const blob = window.SCS_ZIP.create(files.map((f) => ({ name: f.name, content: f.content })));
+        downloadBlob(blob, `${safeName}.zip`);
+      }
+
+      incrementDownloadCount(files.length);
+
+      // Clean success shows nothing — the filled ring is the confirmation.
+      // Only surface a message when some songs were skipped or trimmed.
+      const notes = [];
+      if (failures) {
+        notes.push(`가사 없음 ${failures}곡 제외`);
+      }
+      if (quotaTrimmed) {
+        notes.push('남은 한도까지만 저장됨');
+      }
+      if (notes.length) {
+        showBulkMessage(`${files.length}곡 저장 · ${notes.join(' · ')}`);
+      }
+    } catch (error) {
+      showBulkMessage(error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.');
+    } finally {
+      setBulkBusy(false);
+      if (bulkAbort) {
+        bulkShowStatus = false;
+        if (bulkHideTimer) {
+          window.clearTimeout(bulkHideTimer);
+          bulkHideTimer = 0;
+        }
+      }
+      placeBulkButton();
+    }
   }
 
   function handleAction(action) {
@@ -550,11 +696,11 @@
   }
 
   function checkQuotaOrWarn() {
+    if (isPremium()) return true;
     if (!state.quota?.isNewUser) return true;
     const cap = quotaCap(state.quota.shareCount);
-    if (cap === Infinity) return true;
-    if ((state.quota.downloadCount || 0) < cap) return true;
-    setStatus(`다운로드 한도 ${cap}회 도달 — 확장 아이콘 → 공유하기로 더 받으세요.`, 'error');
+    if (effectiveDownloads(state.quota) < cap) return true;
+    setStatus(`다운로드 한도 ${cap}회 도달 — 공유 또는 프리미엄 구독으로 무제한.`, 'error');
     return false;
   }
 
@@ -801,13 +947,14 @@
     incrementDownloadCount();
   }
 
-  async function incrementDownloadCount() {
+  async function incrementDownloadCount(count = 1) {
+    const amount = Math.max(1, Number(count) || 1);
     try {
       const result = await chrome.storage.local.get([STATS_KEY, QUOTA_KEY]);
       const stats = Number(result?.[STATS_KEY]?.downloadCount ?? 0);
       const updates = {
         [STATS_KEY]: {
-          downloadCount: stats + 1,
+          downloadCount: stats + amount,
           lastDownloadAt: Date.now()
         }
       };
@@ -815,7 +962,7 @@
       if (quota.isNewUser) {
         updates[QUOTA_KEY] = {
           ...quota,
-          downloadCount: quota.downloadCount + 1
+          downloadCount: quota.downloadCount + amount
         };
       }
       await chrome.storage.local.set(updates);
@@ -837,21 +984,25 @@
     }
   }
 
-  function renderExport(format) {
+  function currentCtx() {
+    return { lines: state.lines, title: state.title, songId: state.songId };
+  }
+
+  function renderExport(format, ctx = currentCtx()) {
     const cleanMode = getCleanMode();
-    const lines = cleanMode === 'none' ? state.lines : cleanExportLines(state.lines, cleanMode);
+    const lines = cleanMode === 'none' ? ctx.lines : cleanExportLines(ctx.lines, cleanMode);
     if (format === 'srt') {
       return toSrt(lines);
     }
     if (format === 'txt') {
-      return toTxt(lines, state.settings.includeMeta);
+      return toTxt(lines, state.settings.includeMeta, ctx);
     }
-    return toLrc(lines, state.settings.includeMeta);
+    return toLrc(lines, state.settings.includeMeta, ctx);
   }
 
-  function toLrc(lines, includeMeta) {
+  function toLrc(lines, includeMeta, ctx = currentCtx()) {
     const meta = includeMeta
-      ? [`[ti:${state.title || state.songId}]`, `[re:SUNO 가사 다운로더]`, `[id:${state.songId}]`, '']
+      ? [`[ti:${ctx.title || ctx.songId}]`, `[re:SUNO 가사 다운로더]`, `[id:${ctx.songId}]`, '']
       : [];
     return meta.concat(lines.map((line) => `${formatLrcTime(line.start)}${line.text}`)).join('\n');
   }
@@ -862,9 +1013,9 @@
     }).join('\n');
   }
 
-  function toTxt(lines, includeMeta) {
+  function toTxt(lines, includeMeta, ctx = currentCtx()) {
     const output = includeMeta
-      ? [`Title: ${state.title || state.songId}`, `Song ID: ${state.songId}`, `Exported by: SUNO 가사 다운로더`, '']
+      ? [`Title: ${ctx.title || ctx.songId}`, `Song ID: ${ctx.songId}`, `Exported by: SUNO 가사 다운로더`, '']
       : [];
 
     lines.forEach((line, index) => {
@@ -984,6 +1135,11 @@
     return match ? decodeURIComponent(match[1]) : '';
   }
 
+  function getPlaylistIdFromLocation() {
+    const match = window.location.pathname.match(/^\/playlist\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
+    return match ? match[1] : '';
+  }
+
   function readCookie(name) {
     const prefix = `${name}=`;
     return document.cookie
@@ -993,9 +1149,34 @@
       ?.slice(prefix.length) || '';
   }
 
-  function sendMessage(message) {
-    return new Promise((resolve) => {
-      chrome.runtime.sendMessage(message, resolve);
+  function sendMessage(message, timeoutMs = 0) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const timer = timeoutMs
+        ? window.setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            reject(new Error('요청 시간이 초과되었습니다.'));
+          }, timeoutMs)
+        : 0;
+      try {
+        chrome.runtime.sendMessage(message, (response) => {
+          if (settled) return;
+          settled = true;
+          if (timer) window.clearTimeout(timer);
+          const lastError = chrome.runtime.lastError;
+          if (lastError) {
+            reject(new Error(lastError.message || '확장 프로그램 연결이 끊어졌습니다.'));
+            return;
+          }
+          resolve(response);
+        });
+      } catch (error) {
+        if (settled) return;
+        settled = true;
+        if (timer) window.clearTimeout(timer);
+        reject(error);
+      }
     });
   }
 
@@ -1121,9 +1302,9 @@
     return String(value).padStart(length, '0');
   }
 
-  function makeFileName(format) {
-    const title = slugify(state.title || 'suno-caption');
-    const song = slugify(state.songId || 'song');
+  function makeFileName(format, ctx = currentCtx()) {
+    const title = slugify(ctx.title || 'suno-caption');
+    const song = slugify(ctx.songId || 'song');
     let base;
     if (state.settings.fileName === 'custom') {
       base = renderCustomPattern(state.settings.customPattern, title, song);
@@ -1164,7 +1345,10 @@
   }
 
   function downloadText(content, fileName, mimeType) {
-    const blob = new Blob([content], { type: mimeType });
+    downloadBlob(new Blob([content], { type: mimeType }), fileName);
+  }
+
+  function downloadBlob(blob, fileName) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
