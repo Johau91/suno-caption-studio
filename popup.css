@@ -83,7 +83,8 @@
 }
 
 body {
-  width: 560px;
+  /* 내용이 실제로 쓰는 폭에 맞춘 값. 2열 설정 그리드가 유지되는 하한선이다. */
+  width: 440px;
   margin: 0;
   background: var(--bg);
   color: var(--text);
