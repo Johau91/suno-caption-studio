@@ -1,5 +1,10 @@
 /* Options page-specific layout. Inherits color tokens from popup.css. */
 
+/* popup.css를 함께 불러오므로 팝업용 폭 제약을 명시적으로 되돌린다. */
+html {
+  width: auto;
+}
+
 .options-body {
   width: auto;
   min-height: 100vh;
