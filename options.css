@@ -1,6 +1,8 @@
 /* Options page-specific layout. Inherits color tokens from popup.css. */
 
-/* popup.css를 함께 불러오므로 팝업용 폭 제약을 명시적으로 되돌린다. */
+/* popup.css를 함께 불러오므로 팝업용 폭 제약이 새어 들어오지 않도록 방어한다.
+   (폭 선언 자체는 popup.html 인라인 스타일이 소유하지만, 이 두 줄은
+   로드 순서가 바뀌어도 환경설정이 왼쪽으로 쏠리지 않게 하는 안전장치다.) */
 html {
   width: auto;
 }
@@ -15,28 +17,33 @@ html {
 }
 
 .options-shell {
-  max-width: 640px;
-  margin: 0 auto;
-  padding: 48px 24px;
+  width: 100%;
+  max-width: 680px;
+  margin-inline: auto;
+  padding: 56px 24px 72px;
   display: grid;
-  gap: 24px;
+  gap: 18px;
 }
 
+/* 헤더는 카드 묶음과 한 칸 더 떨어뜨려 "제목 → 설정들" 위계를 만든다. */
 .options-header {
   display: grid;
-  gap: 4px;
+  gap: 6px;
+  padding-bottom: 18px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--line);
 }
 
 .options-header strong {
   color: var(--text-strong);
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 850;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 
 .options-header span {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 13.5px;
 }
 
 .options-card {
@@ -67,9 +74,10 @@ html {
   line-height: 1.45;
 }
 
-/* The lang-toggle on the options page can stretch wider than in the popup. */
+/* 토글은 카드마다 폭이 제각각이면 시선이 흔들린다. 언어 토글만 걸려 있던
+   380px 제한을 걷어내고 모든 토글을 카드 폭에 맞춘다. */
 .options-card .lang-toggle {
-  max-width: 380px;
+  max-width: none;
 }
 
 /* Developer 1:1 contact CTA — clean KakaoTalk pill */

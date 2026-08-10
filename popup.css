@@ -82,12 +82,12 @@
   letter-spacing: 0;
 }
 
-/* 팝업 폭은 popup.html <head>에 인라인으로 선언한다 — 크롬이 이 파일을
-   적용하기 전에 창 크기를 확정해 버리기 때문. 두 값을 함께 고칠 것.
-   여기서 html에 폭을 주면 이 파일을 함께 쓰는 options.html까지 묶여
-   가운데 정렬이 깨지므로, html 규칙은 두지 않는다. */
+/* 팝업 창 폭은 popup.html <head>의 인라인 <style>이 단독으로 소유한다.
+   (1) 크롬이 이 파일을 적용하기 전에 창 크기를 확정해 버리고,
+   (2) options.html도 이 파일을 함께 불러오므로 여기에 폭을 두면
+       환경설정 페이지까지 560px에 묶여 가운데 정렬이 깨진다.
+   따라서 이 파일에는 html/body 폭 선언을 두지 않는다. */
 body {
-  width: 560px;
   margin: 0;
   background: var(--bg);
   color: var(--text);

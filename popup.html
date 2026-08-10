@@ -11,7 +11,15 @@
       그래서 폭만 인라인으로 먼저 못박는다.
     -->
     <style>
-      html, body { width: 560px; max-width: 560px; overflow-x: hidden; }
+      /* 창 폭은 html이 소유한다. body를 함께 560px로 못박으면 세로 스크롤바가
+         생겼을 때 그 폭(약 15px)만큼 오른쪽으로 넘쳐 잘리고, 좌우 패딩이
+         16px : 1px 로 어긋나 보인다. body는 남는 폭을 채우게 둘 것. */
+      /* width 560px = 크롬이 창 크기를 잡는 기준값(FOUC 방지).
+         max-width 100% = 세로 스크롤바가 그 폭만큼 콘텐츠 영역을 깎았을 때
+         html도 같이 줄어들게 하는 부분. 이게 없으면 560px 그대로 남아
+         오른쪽 패딩이 스크롤바 밑으로 잘려 좌우가 16px : 0px 로 어긋난다. */
+      html { width: 560px; max-width: 100%; overflow-x: hidden; }
+      body { width: 100%; max-width: 100%; }
     </style>
     <link rel="stylesheet" href="popup.css">
   </head>
