@@ -278,7 +278,9 @@
     // otherwise removing the root goes unnoticed and never self-heals.
     pageObserver.observe(document.documentElement, { childList: true });
     window.addEventListener('resize', scheduleThumbnailPlacement, { passive: true });
-    window.addEventListener('scroll', scheduleThumbnailPlacement, { passive: true });
+    // capture:true so scrolling an inner pane (not just the window) also
+    // re-anchors the buttons — Suno renders the song page inside one.
+    window.addEventListener('scroll', scheduleThumbnailPlacement, { passive: true, capture: true });
   }
 
   function scheduleThumbnailPlacement() {
@@ -324,24 +326,45 @@
   function findSongCover() {
     const byAlt = document.querySelector('img[alt="Song Cover Image"]');
     if (byAlt) {
-      return byAlt;
+      // The real cover — accept it at any size, only requiring that it is laid
+      // out. A zero-size box means it is still loading or hidden, so wait for
+      // the next pass rather than anchoring to the wrong image.
+      return hasLayout(byAlt) ? byAlt : null;
     }
-    // Fallback: the largest image in the upper-left of the page.
+    // Fallback: the largest square-ish artwork nearest the top of the *document*.
+    // Deliberately not viewport-relative — a scroll-position test made the
+    // buttons vanish as soon as the user scrolled past the cover.
     let best = null;
-    let bestArea = 0;
+    let bestScore = -Infinity;
     for (const image of document.images) {
+      if (!isUsableCover(image)) continue;
       const rect = image.getBoundingClientRect();
-      const aspect = rect.width / Math.max(1, rect.height);
-      const inUpperLeft = rect.top < window.innerHeight * 0.7 && rect.left < window.innerWidth * 0.55;
-      if (rect.width >= 96 && aspect >= 0.5 && aspect <= 1.4 && inUpperLeft) {
-        const area = rect.width * rect.height;
-        if (area > bestArea) {
-          bestArea = area;
-          best = image;
-        }
+      const docTop = window.scrollY + rect.top;
+      // Prefer big artwork, penalise anything far down the page (cover art sits
+      // near the top; track rows and recommendations come later).
+      const score = rect.width * rect.height - docTop * 40;
+      if (score > bestScore) {
+        bestScore = score;
+        best = image;
       }
     }
     return best;
+  }
+
+  function hasLayout(image) {
+    if (!image?.isConnected) return false;
+    const rect = image.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }
+
+  // Only for the guessing path: the size/shape filter that separates cover art
+  // from avatars, icons and banners. The known-good cover skips this.
+  function isUsableCover(image) {
+    if (!hasLayout(image)) return false;
+    const rect = image.getBoundingClientRect();
+    if (rect.width < 96 || rect.height < 96) return false;
+    const aspect = rect.width / rect.height;
+    return aspect >= 0.5 && aspect <= 1.4;
   }
 
   function mountBulkPanel() {

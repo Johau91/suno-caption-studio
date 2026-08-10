@@ -28,7 +28,7 @@ const licenseEls = {
   payBtn: document.querySelector('[data-role="pay-btn"]')
 };
 
-const TIER_PRICE = { '1month': 2900, '1year': 9900, lifetime: 15600 };
+const TIER_PRICE = { '1month': 2900, '1year': 20000, lifetime: 29000 };
 
 let currentLang = 'ko';
 let currentTheme = 'system';

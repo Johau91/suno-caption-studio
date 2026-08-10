@@ -278,6 +278,28 @@ async function fetchOrderStatus(orderId) {
 // so premium verification stays client-side and payment providers are swappable.
 const LICENSE_API_BASE = 'https://webwoori.com/api/license';
 const LICENSE_INSTANCE_NAME = 'SUNO 가사 다운로더';
+const DEVICE_ID_KEY = 'sunoCaptionStudio.deviceId';
+
+/**
+ * 이 설치본을 가리키는 안정적인 식별자.
+ * 서버는 같은 deviceId의 재활성화를 기존 인스턴스 재사용으로 처리하므로,
+ * 확장 재설치·브라우저 변경·저장소 초기화로 활성화 슬롯이 새는 것을 막는다.
+ */
+async function getDeviceId() {
+  try {
+    const stored = await chrome.storage.local.get(DEVICE_ID_KEY);
+    const existing = stored?.[DEVICE_ID_KEY];
+    if (typeof existing === 'string' && existing) {
+      return existing;
+    }
+    const created = crypto.randomUUID();
+    await chrome.storage.local.set({ [DEVICE_ID_KEY]: created });
+    return created;
+  } catch {
+    // 저장소를 쓸 수 없으면 식별자 없이 진행 — 서버가 기존 동작으로 폴백한다.
+    return '';
+  }
+}
 
 async function handleLicense(action, payload) {
   const key = (payload.licenseKey || '').trim();
@@ -288,7 +310,8 @@ async function handleLicense(action, payload) {
   if (action === 'activate') {
     return callLicenseApi('activate', {
       license_key: key,
-      instance_name: LICENSE_INSTANCE_NAME
+      instance_name: LICENSE_INSTANCE_NAME,
+      device_id: await getDeviceId()
     });
   }
   if (action === 'validate') {

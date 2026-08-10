@@ -7,7 +7,7 @@
 
 ## 최근 작업: 프리미엄 결제 — 자체 백엔드 + 페이앱 (v1.3.0)
 Lemon Squeezy 매장 거절 → **webwoori(Next.js)에 자체 라이선스 서버 + 페이앱 1회성 결제**로 전환. 설정: `SETUP-PAYMENT.md`.
-상품: 1개월 ₩2,900 / 1년 ₩9,900 / 평생 ₩15,600 (자동갱신 없음, 카드·카카오·네이버페이).
+상품: 1개월 ₩2,900 / 1년 ₩20,000 / 평생 ₩29,000 (자동갱신 없음, 카드·카카오·네이버페이).
 
 **확장 쪽 (이 repo):**
 - `background.js`: `caption-studio:license` 핸들러 → `https://webwoori.com/api/license/*` (`callLicenseApi`, LS 호환 응답), 12h 자동 재검증
