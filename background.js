@@ -302,6 +302,15 @@ async function getDeviceId() {
 }
 
 async function handleLicense(action, payload) {
+  // 키 재발송은 라이선스 키 없이 이메일만으로 호출된다.
+  if (action === 'recover') {
+    const email = (payload.email || '').trim();
+    if (!email) {
+      throw new Error('이메일을 입력하세요.');
+    }
+    return callLicenseApi('recover', { email });
+  }
+
   const key = (payload.licenseKey || '').trim();
   if (!key) {
     throw new Error('라이선스 키를 입력하세요.');

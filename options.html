@@ -34,7 +34,16 @@
 
         <div class="license-actions">
           <button type="button" class="license-btn license-btn-buy" data-action="open-checkout" aria-expanded="false" aria-controls="license-purchase" data-i18n="prefs.license.subscribe">프리미엄 이용권 구매</button>
+          <button type="button" class="license-btn license-btn-link" data-action="open-recover" data-role="recover-toggle" aria-expanded="false" aria-controls="license-recover" data-i18n="prefs.license.recover">라이선스 찾기</button>
           <button type="button" class="license-btn license-btn-ghost" data-action="deactivate-license" data-role="license-deactivate" hidden data-i18n="prefs.license.deactivate">이 기기에서 비활성화</button>
+        </div>
+
+        <div class="license-recover" id="license-recover" data-role="license-recover" hidden>
+          <p class="license-recover-note" data-i18n="prefs.license.recoverHint">구매할 때 입력한 이메일을 넣으면 라이선스 키를 다시 보내드립니다.</p>
+          <div class="license-activate">
+            <input type="email" class="license-input" data-role="recover-email" aria-label="구매 이메일" data-i18n-aria-label="prefs.license.recoverEmailLabel" data-i18n-placeholder="prefs.license.recoverEmailPlaceholder" placeholder="구매 시 입력한 이메일" autocomplete="email">
+            <button type="button" class="license-btn license-btn-primary" data-action="recover-license" data-role="recover-btn" data-i18n="prefs.license.recoverSend">키 받기</button>
+          </div>
         </div>
 
         <div class="license-purchase" id="license-purchase" data-role="license-purchase" hidden>

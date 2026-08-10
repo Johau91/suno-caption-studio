@@ -25,7 +25,11 @@ const licenseEls = {
   tiers: [...document.querySelectorAll('[data-tier]')],
   phone: document.querySelector('[data-role="buy-phone"]'),
   email: document.querySelector('[data-role="buy-email"]'),
-  payBtn: document.querySelector('[data-role="pay-btn"]')
+  payBtn: document.querySelector('[data-role="pay-btn"]'),
+  recover: document.querySelector('[data-role="license-recover"]'),
+  recoverToggle: document.querySelector('[data-role="recover-toggle"]'),
+  recoverEmail: document.querySelector('[data-role="recover-email"]'),
+  recoverBtn: document.querySelector('[data-role="recover-btn"]')
 };
 
 const TIER_PRICE = { '1month': 2900, '1year': 20000, lifetime: 29000 };
@@ -148,6 +152,54 @@ function setupLicenseUi() {
       activateLicense();
     }
   });
+
+  // 라이선스 찾기 → 이메일 입력 폼 토글.
+  licenseEls.recoverToggle?.addEventListener('click', () => {
+    if (!licenseEls.recover) return;
+    const open = licenseEls.recover.hidden;
+    setRecoverOpen(open);
+    if (open) licenseEls.recoverEmail?.focus();
+  });
+  licenseEls.recoverBtn?.addEventListener('click', recoverLicense);
+  licenseEls.recoverEmail?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') {
+      recoverLicense();
+    }
+  });
+}
+
+function setRecoverOpen(open) {
+  if (licenseEls.recover) licenseEls.recover.hidden = !open;
+  licenseEls.recoverToggle?.setAttribute('aria-expanded', String(open));
+}
+
+/**
+ * 구매 이메일로 라이선스 키 재발송 요청.
+ * 서버는 계정 열거를 막기 위해 구매 내역 유무와 무관하게 같은 응답을 준다.
+ */
+async function recoverLicense() {
+  if (licenseBusy) return;
+  const email = (licenseEls.recoverEmail?.value || '').trim();
+  if (!email) {
+    showLicenseMessage(tr('prefs.license.msg.recoverEnterEmail'), 'error');
+    licenseEls.recoverEmail?.focus();
+    return;
+  }
+  setLicenseBusy(true);
+  showLicenseMessage(tr('prefs.license.msg.recoverSending'), '');
+  try {
+    const response = await sendLicense('recover', { email });
+    if (!response?.ok || response.data?.ok === false) {
+      throw new Error(response?.data?.error || response?.error || '');
+    }
+    showLicenseMessage(tr('prefs.license.msg.recoverSent'), 'ok');
+    if (licenseEls.recoverEmail) licenseEls.recoverEmail.value = '';
+    setRecoverOpen(false);
+  } catch (error) {
+    showLicenseMessage(friendlyErrorMessage(error, 'prefs.license.msg.recoverFailed'), 'error');
+  } finally {
+    setLicenseBusy(false);
+  }
 }
 
 function selectTier(tier) {
@@ -458,6 +510,8 @@ function setLicenseBusy(busy) {
   licenseBusy = busy;
   if (licenseEls.activateBtn) licenseEls.activateBtn.disabled = busy;
   if (licenseEls.input) licenseEls.input.disabled = busy;
+  if (licenseEls.recoverBtn) licenseEls.recoverBtn.disabled = busy;
+  if (licenseEls.recoverEmail) licenseEls.recoverEmail.disabled = busy;
 }
 
 function showLicenseMessage(message, tone) {
