@@ -82,6 +82,13 @@
   letter-spacing: 0;
 }
 
+/* 폭은 popup.html <head>에도 인라인으로 중복 선언한다 — 크롬이 이 파일을
+   적용하기 전에 팝업 창 크기를 확정해 버리기 때문. 두 값을 함께 고칠 것. */
+html {
+  width: 440px;
+  overflow-x: hidden;
+}
+
 body {
   /* 내용이 실제로 쓰는 폭에 맞춘 값. 2열 설정 그리드가 유지되는 하한선이다. */
   width: 440px;
