@@ -422,6 +422,11 @@
   color: var(--text);
 }
 
+.welcome-cta button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--brand) 35%, transparent);
+  outline-offset: 2px;
+}
+
 /* Responsive */
 @media (max-width: 640px) {
   .welcome-shell {
@@ -437,5 +442,14 @@
   }
   .welcome-steps {
     grid-template-columns: 1fr;
+  }
+  .pin-banner {
+    grid-template-columns: 1fr;
+  }
+  .welcome-cta button {
+    flex: 1 1 140px;
+  }
+  .welcome-cta-ghost {
+    margin-left: 0;
   }
 }

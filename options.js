@@ -1,13 +1,11 @@
 const STORAGE_KEY = 'sunoCaptionStudio.settings';
 const LICENSE_KEY = 'sunoCaptionStudio.license';
+const PENDING_ORDER_KEY = 'sunoCaptionStudio.pendingOrder';
 const THEMES = ['system', 'light', 'dark'];
 const BULK_OUTPUTS = ['zip', 'merged'];
 
 // Only accept license keys issued for this app (our server sets meta.app).
 const EXPECTED_APP = 'suno-caption';
-
-// Display copy for the purchase button.
-const PREMIUM_SUBSCRIBE_LABEL = '프리미엄 이용권 구매';
 
 const langButtons = [...document.querySelectorAll('[data-lang]')];
 const themeButtons = [...document.querySelectorAll('[data-theme-choice]')];
@@ -43,7 +41,7 @@ let paymentPolling = false;
 init();
 
 async function init() {
-  const result = await chrome.storage.local.get([STORAGE_KEY, LICENSE_KEY]);
+  const result = await chrome.storage.local.get([STORAGE_KEY, LICENSE_KEY, PENDING_ORDER_KEY]);
   const settings = result[STORAGE_KEY] || {};
   currentLang = window.SCS_I18N.normalizeLang(settings.language);
   currentTheme = normalizeTheme(settings.theme);
@@ -74,6 +72,11 @@ async function init() {
   }
 
   setupLicenseUi();
+  resumePendingPayment(result[PENDING_ORDER_KEY]).catch(() => {
+    paymentPolling = false;
+    if (licenseEls.payBtn) licenseEls.payBtn.disabled = false;
+    showLicenseMessage(tr('prefs.license.msg.requestFailed'), 'error');
+  });
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
@@ -125,15 +128,12 @@ function setupLicenseUi() {
   // 구매 버튼 → 인라인 구매 폼(이용권/휴대폰/이메일) 토글.
   licenseEls.buyBtn?.addEventListener('click', () => {
     if (!licenseEls.purchase) return;
-    licenseEls.purchase.hidden = !licenseEls.purchase.hidden;
-    if (!licenseEls.purchase.hidden) {
+    const open = licenseEls.purchase.hidden;
+    setPurchaseOpen(open);
+    if (open) {
       licenseEls.phone?.focus();
     }
   });
-  if (licenseEls.buyBtn) {
-    licenseEls.buyBtn.textContent = PREMIUM_SUBSCRIBE_LABEL;
-  }
-
   // 이용권 선택.
   for (const tierBtn of licenseEls.tiers) {
     tierBtn.addEventListener('click', () => selectTier(tierBtn.dataset.tier));
@@ -154,49 +154,60 @@ function selectTier(tier) {
   if (!TIER_PRICE[tier]) return;
   selectedTier = tier;
   for (const btn of licenseEls.tiers) {
-    btn.dataset.selected = String(btn.dataset.tier === tier);
+    const selected = btn.dataset.tier === tier;
+    btn.dataset.selected = String(selected);
+    btn.setAttribute('aria-pressed', String(selected));
   }
   renderPayButton();
+}
+
+function setPurchaseOpen(open) {
+  if (licenseEls.purchase) licenseEls.purchase.hidden = !open;
+  licenseEls.buyBtn?.setAttribute('aria-expanded', String(Boolean(open)));
 }
 
 function renderPayButton() {
   if (!licenseEls.payBtn) return;
   const price = TIER_PRICE[selectedTier] || 0;
-  licenseEls.payBtn.textContent = `₩${price.toLocaleString('ko-KR')} 결제하기`;
+  licenseEls.payBtn.textContent = tr('prefs.license.pay', {
+    price: price.toLocaleString(localeForLanguage(currentLang))
+  });
 }
 
 async function startPayment() {
   if (paymentPolling) return;
   const phone = (licenseEls.phone?.value || '').replace(/[^0-9]/g, '');
   if (phone.length < 10 || phone.length > 11) {
-    showLicenseMessage('휴대폰 번호를 정확히 입력하세요.', 'error');
+    showLicenseMessage(tr('prefs.license.msg.phoneInvalid'), 'error');
     licenseEls.phone?.focus();
     return;
   }
   const email = (licenseEls.email?.value || '').trim();
+  if (!email || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    showLicenseMessage(tr('prefs.license.msg.emailInvalid'), 'error');
+    licenseEls.email?.focus();
+    return;
+  }
 
   if (licenseEls.payBtn) licenseEls.payBtn.disabled = true;
-  showLicenseMessage('결제창을 여는 중…', '');
+  showLicenseMessage(tr('prefs.license.msg.openingPayment'), '');
   try {
-    const response = await new Promise((resolve) => {
-      chrome.runtime.sendMessage(
-        {
-          type: 'caption-studio:checkout',
-          payload: { tier: selectedTier, phone, email }
-        },
-        resolve
-      );
+    const response = await sendRuntimeMessage({
+      type: 'caption-studio:checkout',
+      payload: { tier: selectedTier, phone, email }
     });
     const data = response?.ok ? response.data : null;
-    if (!data?.ok || !data.payurl) {
-      throw new Error(data?.error || response?.error || '결제 요청에 실패했습니다.');
+    if (!data?.ok || !data.payurl || !data.orderId) {
+      throw new Error(data?.error || response?.error || tr('prefs.license.msg.paymentRequestFailed'));
     }
     // 결제창을 팝업으로 (payurl = 페이앱/카드결제 바로).
+    const pendingOrder = { orderId: data.orderId, createdAt: Date.now() };
+    await chrome.storage.local.set({ [PENDING_ORDER_KEY]: pendingOrder });
     openPaymentWindow(data.payurl);
-    showLicenseMessage('결제창에서 결제를 완료하세요. 완료되면 자동으로 활성화됩니다.', '');
+    showLicenseMessage(tr('prefs.license.msg.completePayment'), '');
     pollForPayment(data.orderId);
   } catch (error) {
-    showLicenseMessage(error instanceof Error ? error.message : '결제 요청 실패', 'error');
+    showLicenseMessage(friendlyErrorMessage(error, 'prefs.license.msg.paymentRequestFailed'), 'error');
     if (licenseEls.payBtn) licenseEls.payBtn.disabled = false;
   }
 }
@@ -212,21 +223,20 @@ function openPaymentWindow(payurl) {
 
 // 결제 완료를 폴링해서 라이선스 키를 받아 자동 활성화.
 async function pollForPayment(orderId) {
-  if (!orderId) return;
+  if (!orderId || paymentPolling) return;
   paymentPolling = true;
-  const maxTries = 120; // 약 6분 (3초 간격)
-  let tries = 0;
+  if (licenseEls.payBtn) licenseEls.payBtn.disabled = true;
+  const deadline = Date.now() + 6 * 60 * 1000;
+  const handleTickError = () => {
+    paymentPolling = false;
+    if (licenseEls.payBtn) licenseEls.payBtn.disabled = false;
+    showLicenseMessage(tr('prefs.license.msg.requestFailed'), 'error');
+  };
 
   const tick = async () => {
-    tries += 1;
     let data = null;
     try {
-      const res = await new Promise((resolve) => {
-        chrome.runtime.sendMessage(
-          { type: 'caption-studio:order-status', orderId },
-          resolve
-        );
-      });
+      const res = await sendRuntimeMessage({ type: 'caption-studio:order-status', orderId }, 15000);
       data = res?.ok ? res.data : null;
     } catch {
       // 무시하고 계속 폴링
@@ -234,29 +244,49 @@ async function pollForPayment(orderId) {
     if (data?.ok && data.status === 'paid' && data.licenseKey) {
       paymentPolling = false;
       if (licenseEls.payBtn) licenseEls.payBtn.disabled = false;
-      await activateWithKey(data.licenseKey);
+      const activated = await activateWithKey(data.licenseKey);
+      if (activated) {
+        await chrome.storage.local.remove(PENDING_ORDER_KEY);
+      }
       return;
     }
-    if (tries >= maxTries) {
+    if (data?.ok && data.status === 'failed') {
+      paymentPolling = false;
+      await chrome.storage.local.remove(PENDING_ORDER_KEY);
+      if (licenseEls.payBtn) licenseEls.payBtn.disabled = false;
+      showLicenseMessage(tr('prefs.license.msg.paymentFailed'), 'error');
+      return;
+    }
+    if (Date.now() >= deadline) {
       paymentPolling = false;
       if (licenseEls.payBtn) licenseEls.payBtn.disabled = false;
-      showLicenseMessage(
-        '결제 확인이 지연됩니다. 결제하셨다면 잠시 후 다시 시도하거나 이메일의 키로 활성화하세요.',
-        'error'
-      );
+      showLicenseMessage(tr('prefs.license.msg.paymentDelayed'), 'error');
       return;
     }
-    window.setTimeout(tick, 3000);
+    window.setTimeout(() => tick().catch(handleTickError), 3000);
   };
-  window.setTimeout(tick, 3000);
+  tick().catch(handleTickError);
+}
+
+async function resumePendingPayment(pending) {
+  const orderId = typeof pending?.orderId === 'string' ? pending.orderId : '';
+  const createdAt = Number(pending?.createdAt) || 0;
+  if (!orderId) return;
+  if (!createdAt || Date.now() - createdAt > 24 * 60 * 60 * 1000) {
+    await chrome.storage.local.remove(PENDING_ORDER_KEY);
+    return;
+  }
+  showLicenseMessage(tr('prefs.license.msg.resumingPayment'), '');
+  pollForPayment(orderId);
 }
 
 // 결제로 받은 키를 입력칸에 채우고 활성화까지 자동 실행.
 async function activateWithKey(key) {
   if (licenseEls.input) licenseEls.input.value = key;
-  showLicenseMessage('결제 완료! 프리미엄을 활성화하는 중…', 'ok');
-  await activateLicense();
-  if (licenseEls.purchase) licenseEls.purchase.hidden = true;
+  showLicenseMessage(tr('prefs.license.msg.activatingPaid'), 'ok');
+  const activated = await activateLicense();
+  if (activated) setPurchaseOpen(false);
+  return activated;
 }
 
 function renderLicense() {
@@ -265,16 +295,16 @@ function renderLicense() {
     licenseEls.status.dataset.state = active ? 'premium' : 'free';
   }
   if (licenseEls.badge) {
-    licenseEls.badge.textContent = active ? '프리미엄' : '무료';
+    licenseEls.badge.textContent = tr(active ? 'prefs.license.premium' : 'prefs.license.free');
   }
   if (licenseEls.statusText) {
     if (active) {
       const until = currentLicense.expiresAt
-        ? ` (갱신일: ${formatDate(currentLicense.expiresAt)})`
+        ? ` (${tr('prefs.license.renewal', { date: formatDate(currentLicense.expiresAt) })})`
         : '';
-      licenseEls.statusText.textContent = `다운로드 무제한 이용 중${until}`;
+      licenseEls.statusText.textContent = `${tr('prefs.license.statusActive')}${until}`;
     } else {
-      licenseEls.statusText.textContent = '다운로드 한도가 적용됩니다.';
+      licenseEls.statusText.textContent = tr('prefs.license.statusFree');
     }
   }
   if (licenseEls.activate) {
@@ -288,13 +318,41 @@ function renderLicense() {
 function formatDate(value) {
   const ms = Date.parse(value);
   if (Number.isNaN(ms)) return '';
-  const d = new Date(ms);
-  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+  return new Intl.DateTimeFormat(localeForLanguage(currentLang), {
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(new Date(ms));
 }
 
 function sendLicense(action, payload) {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ type: 'caption-studio:license', action, payload }, resolve);
+  return sendRuntimeMessage({ type: 'caption-studio:license', action, payload });
+}
+
+function sendRuntimeMessage(message, timeoutMs = 20000) {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error(tr('prefs.license.msg.requestTimeout')));
+    }, timeoutMs);
+    try {
+      chrome.runtime.sendMessage(message, (response) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        const lastError = chrome.runtime.lastError;
+        if (lastError) {
+          reject(new Error(lastError.message || tr('prefs.license.msg.requestFailed')));
+          return;
+        }
+        resolve(response);
+      });
+    } catch (error) {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      reject(error);
+    }
   });
 }
 
@@ -302,10 +360,11 @@ function sendLicense(action, payload) {
 function licenseFromResponse(data, key, instanceId) {
   const lk = data?.license_key || {};
   const status = lk.status || '';
+  const expectedApp = data?.meta?.app === EXPECTED_APP;
   return {
     key,
     instanceId: instanceId || data?.instance?.id || '',
-    valid: Boolean(data?.valid ?? data?.activated) && status !== 'expired' && status !== 'disabled',
+    valid: expectedApp && Boolean(data?.valid ?? data?.activated) && status !== 'expired' && status !== 'disabled',
     status,
     expiresAt: lk.expires_at || null,
     customerName: data?.meta?.customer_name || ''
@@ -313,39 +372,41 @@ function licenseFromResponse(data, key, instanceId) {
 }
 
 async function activateLicense() {
-  if (licenseBusy) return;
+  if (licenseBusy) return false;
   const key = (licenseEls.input?.value || '').trim();
   if (!key) {
-    showLicenseMessage('라이선스 키를 입력하세요.', 'error');
-    return;
+    showLicenseMessage(tr('prefs.license.msg.enterKey'), 'error');
+    return false;
   }
   setLicenseBusy(true);
-  showLicenseMessage('활성화 중…', '');
+  showLicenseMessage(tr('prefs.license.msg.activating'), '');
   try {
     const response = await sendLicense('activate', { licenseKey: key });
     if (!response?.ok) {
-      throw new Error(response?.error || '활성화에 실패했습니다.');
+      throw new Error(response?.error || tr('prefs.license.msg.activationFailed'));
     }
     const data = response.data || {};
     if (!(data.activated || data.valid)) {
-      throw new Error(data.error || '유효하지 않은 라이선스 키입니다.');
+      throw new Error(data.error || tr('prefs.license.msg.invalidKey'));
     }
     // Guard: make sure this key was issued for this app, not another product.
     const meta = data.meta || {};
-    if (meta.app && meta.app !== EXPECTED_APP) {
-      throw new Error('이 확장 프로그램의 라이선스 키가 아닙니다.');
+    if (meta.app !== EXPECTED_APP) {
+      throw new Error(tr('prefs.license.msg.wrongApp'));
     }
     const license = licenseFromResponse(data, key, data?.instance?.id);
     if (!license.valid) {
-      throw new Error('이 라이선스는 만료되었거나 비활성 상태입니다.');
+      throw new Error(tr('prefs.license.msg.inactive'));
     }
     await chrome.storage.local.set({ [LICENSE_KEY]: license });
     currentLicense = license;
     renderLicense();
-    showLicenseMessage('프리미엄이 활성화되었습니다. 다운로드 무제한!', 'ok');
+    showLicenseMessage(tr('prefs.license.msg.activated'), 'ok');
     if (licenseEls.input) licenseEls.input.value = '';
+    return true;
   } catch (error) {
-    showLicenseMessage(error instanceof Error ? error.message : '활성화에 실패했습니다.', 'error');
+    showLicenseMessage(friendlyErrorMessage(error, 'prefs.license.msg.activationFailed'), 'error');
+    return false;
   } finally {
     setLicenseBusy(false);
   }
@@ -367,7 +428,7 @@ async function deactivateLicense() {
   await chrome.storage.local.remove(LICENSE_KEY);
   currentLicense = normalizeLicense(null);
   renderLicense();
-  showLicenseMessage('이 기기에서 비활성화했습니다.', 'ok');
+  showLicenseMessage(tr('prefs.license.msg.deactivated'), 'ok');
   setLicenseBusy(false);
 }
 
@@ -404,6 +465,12 @@ function showLicenseMessage(message, tone) {
   licenseEls.msg.textContent = message;
   licenseEls.msg.dataset.tone = tone || '';
   licenseEls.msg.hidden = !message;
+}
+
+function friendlyErrorMessage(error, fallbackKey) {
+  const message = error instanceof Error ? error.message : '';
+  if (message === 'request_timeout') return tr('prefs.license.msg.requestTimeout');
+  return message || tr(fallbackKey);
 }
 
 function normalizeTheme(theme) {
@@ -468,6 +535,16 @@ function applyAll(lang) {
   window.SCS_I18N.apply(lang, { titleKey: 'options.docTitle' });
   syncLangToggle(lang);
   showShortcut();
+  renderLicense();
+  renderPayButton();
+}
+
+function tr(key, params) {
+  return window.SCS_I18N.t(currentLang, key, params);
+}
+
+function localeForLanguage(lang) {
+  return ({ ko: 'ko-KR', en: 'en-US', ja: 'ja-JP', zh: 'zh-CN', es: 'es-ES' })[lang] || 'ko-KR';
 }
 
 function syncLangToggle(lang) {

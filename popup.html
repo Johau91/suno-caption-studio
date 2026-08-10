@@ -14,10 +14,11 @@
           <span data-i18n="header.subtitle">썸네일 다운로드 버튼 기본값</span>
         </div>
         <div class="popup-header-actions">
-          <button type="button" class="header-icon-btn header-icon-btn-brand" data-action="open-suno"
+          <button type="button" class="header-icon-btn header-icon-btn-brand header-suno-btn" data-action="open-suno"
             data-i18n-tooltip="header.openSuno" data-i18n-aria-label="header.openSuno"
             data-tooltip="Suno 열기" aria-label="Suno 열기">
             <img class="header-brand-img" src="icons/suno.png" alt="" aria-hidden="true">
+            <span class="header-icon-btn-label" data-i18n="header.openSuno">Suno 열기</span>
           </button>
           <div class="share-wrap">
             <button type="button" class="header-icon-btn" data-action="toggle-share"
@@ -124,7 +125,7 @@
             <input type="checkbox" data-setting="includeMeta">
             <span data-i18n="check.includeMeta">LRC/TXT에 제목과 곡 ID 포함</span>
           </label>
-          <p class="status" data-role="status" data-i18n="status.idle">설정이 자동 저장됩니다.</p>
+          <p class="status" data-role="status" role="status" aria-live="polite" aria-atomic="true" data-i18n="status.idle">설정이 자동 저장됩니다.</p>
         </div>
 
         <div class="stats-row" data-role="stats-row" hidden>
@@ -168,9 +169,12 @@
       <section class="other-tools" aria-label="개발자의 다른 도구">
         <div class="section-heading">
           <strong data-i18n="tools.title">개발자의 다른 도구</strong>
-          <span data-i18n="tools.subtitle">바로가기</span>
+          <button type="button" class="tools-toggle" data-action="toggle-tools" aria-expanded="false" aria-controls="tool-links">
+            <span data-role="tools-toggle-label" data-i18n="tools.showAll">모두 보기</span>
+            <span class="tools-toggle-chevron" aria-hidden="true">⌄</span>
+          </button>
         </div>
-        <div class="tool-links">
+        <div class="tool-links" id="tool-links">
           <button type="button" data-url="https://playlistforge.com/">
             <span class="tool-icon tool-icon-forge" aria-hidden="true"></span>
             <span class="tool-copy">
@@ -199,35 +203,35 @@
               <span>음악을 듣는 모두와 만드는 모두를 잇다</span>
             </span>
           </button>
-          <button type="button" data-url="https://cafe.naver.com/playlistforge">
+          <button type="button" class="tool-link-more" data-url="https://cafe.naver.com/playlistforge" hidden>
             <span class="tool-icon tool-icon-cafe" aria-hidden="true"></span>
             <span class="tool-copy">
               <strong>플리공장 카페 <span aria-hidden="true">↗</span></strong>
               <span>AI 음악 제작 노하우 커뮤니티</span>
             </span>
           </button>
-          <button type="button" data-url="https://open.kakao.com/o/gziXkYci">
+          <button type="button" class="tool-link-more" data-url="https://open.kakao.com/o/gziXkYci" hidden>
             <span class="tool-icon tool-icon-chat" aria-hidden="true"></span>
             <span class="tool-copy">
               <strong>AI 음악 오픈채팅 <span aria-hidden="true">↗</span></strong>
               <span>SUNO AI 음악 제작자들의 실시간 대화방</span>
             </span>
           </button>
-          <button type="button" data-url="https://www.youtube.com/channel/UC6XpBKHOO4H6U-dtUEUQJWw">
+          <button type="button" class="tool-link-more" data-url="https://www.youtube.com/channel/UC6XpBKHOO4H6U-dtUEUQJWw" hidden>
             <span class="tool-icon tool-icon-youtube" aria-hidden="true"></span>
             <span class="tool-copy">
               <strong>유튜브 채널 <span aria-hidden="true">↗</span></strong>
               <span>AI 음악 / Suno 활용 영상 보러가기</span>
             </span>
           </button>
-          <button type="button" data-url="https://open.kakao.com/me/playlistforge">
+          <button type="button" class="tool-link-more" data-url="https://open.kakao.com/me/playlistforge" hidden>
             <span class="tool-icon tool-icon-contact" aria-hidden="true"></span>
             <span class="tool-copy">
               <strong>개발자 1:1 문의하기 <span aria-hidden="true">↗</span></strong>
               <span>확장 프로그램 사용 문의와 피드백을 남겨주세요</span>
             </span>
           </button>
-          <button type="button" data-url="https://webwoori.com/">
+          <button type="button" class="tool-link-more" data-url="https://webwoori.com/" hidden>
             <span class="tool-icon tool-icon-webwoori" aria-hidden="true"></span>
             <span class="tool-copy">
               <strong>개발자 사이트 <span aria-hidden="true">↗</span></strong>
@@ -237,7 +241,7 @@
         </div>
       </section>
     </main>
-    <div class="toast" data-role="toast" hidden></div>
+    <div class="toast" data-role="toast" role="status" aria-live="polite" aria-atomic="true" hidden></div>
     <script src="i18n.js"></script>
     <script src="popup.js"></script>
   </body>

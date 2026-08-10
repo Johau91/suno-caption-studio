@@ -1,6 +1,7 @@
 const UPDATE_INFO_KEY = 'sunoCaptionStudio.updateInfo';
 const QUOTA_KEY = 'sunoCaptionStudio.quota';
 const LICENSE_STORAGE_KEY = 'sunoCaptionStudio.license';
+const EXPECTED_LICENSE_APP = 'suno-caption';
 const LICENSE_ALARM = 'caption-studio:license-revalidate';
 const LICENSE_REVALIDATE_MINUTES = 720; // every 12 hours
 const BADGE_TEXT = 'NEW';
@@ -95,7 +96,10 @@ async function revalidateStoredLicense() {
       [LICENSE_STORAGE_KEY]: {
         key: lic.key,
         instanceId: lic.instanceId || '',
-        valid: Boolean(data.valid) && status !== 'expired' && status !== 'disabled',
+        valid: data?.meta?.app === EXPECTED_LICENSE_APP
+          && Boolean(data.valid)
+          && status !== 'expired'
+          && status !== 'disabled',
         status,
         expiresAt: lk.expires_at || null,
         customerName: data?.meta?.customer_name || lic.customerName || ''
@@ -245,7 +249,7 @@ const CHECKOUT_URL = 'https://webwoori.com/api/payapp/checkout';
 const ORDER_STATUS_URL = 'https://webwoori.com/api/payapp/order';
 
 async function requestCheckout(payload) {
-  const response = await fetch(CHECKOUT_URL, {
+  const response = await fetchWithTimeout(CHECKOUT_URL, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -256,14 +260,15 @@ async function requestCheckout(payload) {
       phone: payload.phone || '',
       email: payload.email || ''
     }).toString()
-  });
+  }, 20000);
   return response.json().catch(() => ({ ok: false, error: '응답 오류' }));
 }
 
 async function fetchOrderStatus(orderId) {
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${ORDER_STATUS_URL}?order=${encodeURIComponent(orderId || '')}`,
-    { headers: { Accept: 'application/json' } }
+    { headers: { Accept: 'application/json' } },
+    12000
   );
   return response.json().catch(() => ({ ok: false }));
 }
@@ -303,19 +308,34 @@ async function handleLicense(action, payload) {
 }
 
 async function callLicenseApi(path, params) {
-  const response = await fetch(`${LICENSE_API_BASE}/${path}`, {
+  const response = await fetchWithTimeout(`${LICENSE_API_BASE}/${path}`, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/x-www-form-urlencoded'
     },
     body: new URLSearchParams(params).toString()
-  });
+  }, 20000);
 
   // The license API returns JSON with valid/activated booleans and an `error`
   // field both on success (200) and on handled failures (400/404).
   const json = await response.json().catch(() => ({}));
   return { httpStatus: response.status, ...json };
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = 20000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error('request_timeout');
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 const PLAYLIST_PAGE_SIZE = 50;

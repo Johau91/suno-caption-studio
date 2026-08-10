@@ -1,4 +1,5 @@
 (() => {
+  const testHooks = globalThis.__SCS_TEST_HOOKS__;
   const STORAGE_KEY = 'sunoCaptionStudio.settings';
   const STATS_KEY = 'sunoCaptionStudio.stats';
   const QUOTA_KEY = 'sunoCaptionStudio.quota';
@@ -47,7 +48,6 @@
     };
   }
   const state = {
-    open: false,
     busy: false,
     songId: '',
     title: '',
@@ -74,12 +74,63 @@
   let bulkAbort = false;
   let bulkShowStatus = false;
   let bulkHideTimer = 0;
+  let statusTimer = 0;
   let els = {};
   let routeTimer = 0;
   let thumbnailTimer = 0;
   let pageObserver;
+  let contextDead = false;
 
-  init();
+  // Chrome orphans the content script when the extension is updated or reloaded
+  // while a Suno tab is open. Every chrome.* call then throws
+  // "Extension context invalidated" and the UI silently stops responding, so we
+  // detect it and tell the user to reload instead of failing quietly.
+  function isContextAlive() {
+    try {
+      return Boolean(chrome.runtime?.id);
+    } catch {
+      return false;
+    }
+  }
+
+  function isContextInvalidatedError(error) {
+    return /Extension context invalidated|Receiving end does not exist/i
+      .test(String(error?.message || error || ''));
+  }
+
+  function handleDeadContext() {
+    if (contextDead) return;
+    contextDead = true;
+    pageObserver?.disconnect();
+    pageObserver = null;
+    window.clearTimeout(thumbnailTimer);
+    window.clearTimeout(routeTimer);
+    if (!root?.isConnected) {
+      mountRoot();
+    }
+    downloadGroup?.remove();
+    bulkFab?.remove();
+    bulkPanel?.remove();
+    setStatus(tr('content.contextInvalidated'), 'error', true);
+  }
+
+  function tr(key, params) {
+    const lang = window.SCS_I18N?.normalizeLang(state.settings.language);
+    return window.SCS_I18N?.t(lang || 'ko', key, params) || key;
+  }
+
+  function localizeRuntimeError(message) {
+    const text = String(message || '');
+    const apiStatus = text.match(/Suno API 응답 오류 \((\d+)\)/);
+    if (apiStatus) return tr('content.apiError', { status: apiStatus[1] });
+    if (text.includes('요청 시간이 초과')) return tr('content.requestTimeout');
+    if (text.includes('로그인 세션')) return tr('content.loginRequired');
+    if (text.includes('연결이 끊어')) return tr('content.connectionLost');
+    if (isContextInvalidatedError({ message: text })) return tr('content.contextInvalidated');
+    return text || tr('content.unknownError');
+  }
+
+  if (!testHooks) init();
 
   chrome.runtime.onMessage.addListener((message) => {
     if (message?.type === 'caption-studio:navigation') {
@@ -102,7 +153,7 @@
     if (area !== 'local') return;
     if (changes[STORAGE_KEY]?.newValue) {
       state.settings = { ...state.settings, ...changes[STORAGE_KEY].newValue };
-      renderSettings();
+      updateLocalizedLabels();
       scheduleThumbnailPlacement();
     }
     if (changes[QUOTA_KEY]?.newValue) {
@@ -141,78 +192,54 @@
     }
   }
 
+  // Suno is a SPA and other extensions share this DOM, so any of our nodes can
+  // be torn off the page at any time. Each piece is re-created independently
+  // whenever it goes missing — otherwise the UI stays gone until a page reload
+  // (which is why uninstall/reinstall appeared to "fix" it).
   function mount() {
-    if (document.getElementById('suno-caption-studio-root')) {
-      return;
-    }
+    let rebuilt = false;
 
+    if (!root?.isConnected) {
+      document.getElementById('suno-caption-studio-root')?.remove();
+      mountRoot();
+      rebuilt = true;
+    }
+    if (!downloadGroup?.isConnected) {
+      mountDownloadGroup();
+      rebuilt = true;
+    }
+    if (!bulkFab?.isConnected || !bulkPanel?.isConnected) {
+      bulkFab?.remove();
+      bulkPanel?.remove();
+      mountBulkPanel();
+      if (bulkBusy) setRing(0, true);
+      rebuilt = true;
+    }
+    if (rebuilt) {
+      updateLocalizedLabels();
+    }
+  }
+
+  function mountRoot() {
     root = document.createElement('div');
     root.id = 'suno-caption-studio-root';
     root.className = 'scs-root';
     root.innerHTML = `
-      <section class="scs-panel" aria-label="SUNO 가사 다운로더">
-        <header class="scs-header">
-          <div class="scs-title">
-            <strong>가사 저장 설정</strong>
-            <span data-role="subtitle">확장 프로그램 아이콘으로 열고 닫기</span>
-          </div>
-          <button class="scs-icon-button" type="button" data-action="close" aria-label="닫기">×</button>
-        </header>
-        <div class="scs-body">
-          <div class="scs-status" data-role="status">곡 페이지에서 가사를 불러올 수 있습니다.</div>
-          <div class="scs-main">
-            <div class="scs-field scs-format">
-              <label for="scs-format">형식</label>
-              <select id="scs-format" class="scs-select" data-setting="format">
-                <option value="lrc">LRC</option>
-                <option value="srt">SRT</option>
-                <option value="txt">TXT</option>
-              </select>
-            </div>
-            <button class="scs-button" type="button" data-action="save-selected">저장</button>
-            <button class="scs-button" type="button" data-kind="secondary" data-action="copy-selected">복사</button>
-          </div>
-          <button class="scs-button scs-wide-button" type="button" data-kind="secondary" data-action="save-all">LRC/SRT/TXT 저장</button>
-          <details class="scs-details">
-            <summary>옵션</summary>
-            <div class="scs-options">
-            <div class="scs-field">
-              <label for="scs-filename">파일명</label>
-              <select id="scs-filename" class="scs-select" data-setting="fileName">
-                <option value="title-song">제목 + 곡 ID</option>
-                <option value="title">제목만</option>
-                <option value="song">곡 ID만</option>
-              </select>
-            </div>
-            <label class="scs-check">
-              <input type="checkbox" data-setting="includeMeta">
-              <span>LRC/TXT에 제목과 곡 ID 포함</span>
-            </label>
-            <button class="scs-button scs-wide-button" type="button" data-kind="secondary" data-action="refresh">다시 불러오기</button>
-          </div>
-          </details>
-          <div class="scs-empty">
-            현재 페이지에서 동기화된 가사를 찾지 못했습니다. Suno에 로그인되어 있는지 확인하고 곡 상세 페이지에서 다시 시도하세요.
-          </div>
-          <details class="scs-preview">
-            <summary class="scs-preview-head">
-              <span data-role="summary">대기 중</span>
-              <span data-role="file">파일명 미리보기</span>
-            </summary>
-            <pre data-role="preview"></pre>
-          </details>
-        </div>
-      </section>
+      <div class="scs-toast" data-role="status" role="status" aria-live="polite" aria-atomic="true" hidden></div>
     `;
 
     document.documentElement.appendChild(root);
+    els = { status: root.querySelector('[data-role="status"]') };
+  }
+
+  function mountDownloadGroup() {
     downloadGroup = document.createElement('div');
     downloadGroup.className = 'scs-download-group';
     downloadGroup.hidden = true;
     downloadGroup.innerHTML = `
-      <button class="scs-format-download" type="button" data-format="lrc" aria-label="LRC 다운로드">LRC</button>
-      <button class="scs-format-download" type="button" data-format="srt" aria-label="SRT 다운로드">SRT</button>
-      <button class="scs-format-download" type="button" data-format="txt" aria-label="TXT 다운로드">TXT</button>
+      <button class="scs-format-download" type="button" data-format="lrc">LRC</button>
+      <button class="scs-format-download" type="button" data-format="srt">SRT</button>
+      <button class="scs-format-download" type="button" data-format="txt">TXT</button>
     `;
     downloadGroup.addEventListener('click', (event) => {
       const button = event.target.closest('[data-format]');
@@ -224,44 +251,15 @@
       downloadFromThumbnail(button.dataset.format);
     });
     document.body.appendChild(downloadGroup);
-    mountBulkPanel();
+  }
 
-    els = {
-      status: root.querySelector('[data-role="status"]'),
-      subtitle: root.querySelector('[data-role="subtitle"]'),
-      summary: root.querySelector('[data-role="summary"]'),
-      file: root.querySelector('[data-role="file"]'),
-      preview: root.querySelector('[data-role="preview"]'),
-      buttons: [...root.querySelectorAll('[data-action]')],
-      format: root.querySelector('[data-setting="format"]'),
-      fileName: root.querySelector('[data-setting="fileName"]'),
-      includeMeta: root.querySelector('[data-setting="includeMeta"]')
-    };
-
-    root.addEventListener('click', (event) => {
-      const action = event.target.closest('[data-action]')?.dataset.action;
-      if (!action) {
-        return;
-      }
-      handleAction(action);
-    });
-
-    root.addEventListener('change', (event) => {
-      const key = event.target.dataset.setting;
-      if (!key) {
-        return;
-      }
-      if (event.target.type === 'checkbox') {
-        state.settings[key] = event.target.checked;
-      } else {
-        state.settings[key] = event.target.value;
-      }
-      writeSettings(state.settings);
-      render();
-    });
-
-    renderSettings();
-    render();
+  function updateLocalizedLabels() {
+    for (const button of downloadGroup?.querySelectorAll('[data-format]') || []) {
+      button.setAttribute('aria-label', tr('content.downloadFormat', { format: button.dataset.format.toUpperCase() }));
+    }
+    const bulkLabel = tr('content.bulkLabel');
+    bulkFab?.setAttribute('aria-label', bulkLabel);
+    if (bulkFab) bulkFab.title = bulkLabel;
   }
 
   function observePage() {
@@ -276,13 +274,22 @@
       attributes: true,
       attributeFilter: ['src', 'style', 'class']
     });
+    // The toast root is attached to <html>, not <body>, so watch that level too —
+    // otherwise removing the root goes unnoticed and never self-heals.
+    pageObserver.observe(document.documentElement, { childList: true });
     window.addEventListener('resize', scheduleThumbnailPlacement, { passive: true });
     window.addEventListener('scroll', scheduleThumbnailPlacement, { passive: true });
   }
 
   function scheduleThumbnailPlacement() {
+    if (contextDead) return;
     window.clearTimeout(thumbnailTimer);
     thumbnailTimer = window.setTimeout(() => {
+      if (!isContextAlive()) {
+        handleDeadContext();
+        return;
+      }
+      mount();
       placeThumbnailButton();
       placeBulkButton();
     }, 120);
@@ -344,8 +351,8 @@
     bulkFab.type = 'button';
     bulkFab.className = 'scs-bulk-fab';
     bulkFab.hidden = true;
-    bulkFab.setAttribute('aria-label', '플레이리스트 전체 가사 다운로드');
-    bulkFab.title = '플레이리스트 전체 가사 다운로드';
+    bulkFab.setAttribute('aria-label', tr('content.bulkLabel'));
+    bulkFab.title = tr('content.bulkLabel');
     // Circular progress ring drawn around the icon while downloading.
     const ringNS = 'http://www.w3.org/2000/svg';
     const ring = document.createElementNS(ringNS, 'svg');
@@ -510,14 +517,14 @@
 
     const token = readCookie('__session');
     if (!token) {
-      showBulkMessage('Suno 로그인 세션을 찾지 못했습니다.');
+      showBulkMessage(tr('content.loginRequired'));
       return;
     }
 
     if (!isPremium() && state.quota?.isNewUser) {
       const cap = quotaCap(state.quota.shareCount);
       if (effectiveDownloads(state.quota) >= cap) {
-        showBulkMessage(`다운로드 한도 ${cap}회 도달 — 공유 또는 프리미엄 구독으로 무제한.`);
+        showBulkMessage(tr('content.quotaReached', { cap }));
         return;
       }
     }
@@ -533,14 +540,14 @@
         token
       }, 120000);
       if (!listResponse?.ok) {
-        throw new Error(listResponse?.error || '플레이리스트를 불러오지 못했습니다.');
+        throw new Error(listResponse?.error || tr('content.playlistLoadFailed'));
       }
 
       const playlistName = listResponse.playlist?.name || 'suno-playlist';
       let clips = listResponse.playlist?.clips || [];
       if (!clips.length) {
         setBulkBusy(false);
-        showBulkMessage('플레이리스트에 곡이 없습니다.');
+        showBulkMessage(tr('content.playlistEmpty'));
         return;
       }
 
@@ -600,7 +607,7 @@
 
       if (!files.length) {
         setBulkBusy(false);
-        showBulkMessage('저장할 가사를 찾지 못했습니다.');
+        showBulkMessage(tr('content.noLyrics'));
         return;
       }
 
@@ -614,7 +621,7 @@
         downloadText(merged, `${safeName}.${format}`, mimeFor(format));
       } else {
         if (!window.SCS_ZIP) {
-          throw new Error('ZIP 모듈을 불러오지 못했습니다.');
+          throw new Error(tr('content.zipMissing'));
         }
         const blob = window.SCS_ZIP.create(files.map((f) => ({ name: f.name, content: f.content })));
         downloadBlob(blob, `${safeName}.zip`);
@@ -626,16 +633,16 @@
       // Only surface a message when some songs were skipped or trimmed.
       const notes = [];
       if (failures) {
-        notes.push(`가사 없음 ${failures}곡 제외`);
+        notes.push(tr('content.bulkSkipped', { count: failures }));
       }
       if (quotaTrimmed) {
-        notes.push('남은 한도까지만 저장됨');
+        notes.push(tr('content.bulkQuotaTrimmed'));
       }
       if (notes.length) {
-        showBulkMessage(`${files.length}곡 저장 · ${notes.join(' · ')}`);
+        showBulkMessage(`${tr('content.bulkSaved', { count: files.length })} · ${notes.join(' · ')}`);
       }
     } catch (error) {
-      showBulkMessage(error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.');
+      showBulkMessage(localizeRuntimeError(error instanceof Error ? error.message : ''));
     } finally {
       setBulkBusy(false);
       if (bulkAbort) {
@@ -646,28 +653,6 @@
         }
       }
       placeBulkButton();
-    }
-  }
-
-  function handleAction(action) {
-    if (action === 'close') {
-      setOpen(false);
-      return;
-    }
-    if (action === 'refresh') {
-      refreshCaptions();
-      return;
-    }
-    if (action === 'save-selected') {
-      saveFormat(state.settings.format);
-      return;
-    }
-    if (action === 'copy-selected') {
-      copyFormat(state.settings.format);
-      return;
-    }
-    if (action === 'save-all') {
-      ['lrc', 'srt', 'txt'].forEach((format) => saveFormat(format));
     }
   }
 
@@ -682,7 +667,7 @@
 
     const songId = getSongIdFromLocation();
     if (!songId) {
-      setStatus('Suno 곡 상세 페이지에서 사용할 수 있습니다.', 'error');
+      setStatus(tr('content.songOnly'), 'error');
       return;
     }
 
@@ -700,13 +685,8 @@
     if (!state.quota?.isNewUser) return true;
     const cap = quotaCap(state.quota.shareCount);
     if (effectiveDownloads(state.quota) < cap) return true;
-    setStatus(`다운로드 한도 ${cap}회 도달 — 공유 또는 프리미엄 구독으로 무제한.`, 'error');
+    setStatus(tr('content.quotaReached', { cap }), 'error');
     return false;
-  }
-
-  function setOpen(open) {
-    state.open = open;
-    render();
   }
 
   function resetForRoute() {
@@ -718,7 +698,7 @@
     state.songId = songId;
     state.title = '';
     state.lines = [];
-    render();
+    scheduleThumbnailPlacement();
   }
 
   async function refreshCaptions() {
@@ -727,21 +707,21 @@
     state.lines = [];
 
     if (!songId) {
-      setStatus('Suno 곡 상세 페이지에서 사용할 수 있습니다.', 'error');
-      render();
+      setStatus(tr('content.songOnly'), 'error');
+      scheduleThumbnailPlacement();
       return;
     }
 
     const token = readCookie('__session');
     if (!token) {
-      setStatus('Suno 로그인 세션을 찾지 못했습니다. Suno에 로그인한 뒤 다시 시도하세요.', 'error');
-      render();
+      setStatus(tr('content.loginRequired'), 'error');
+      scheduleThumbnailPlacement();
       return;
     }
 
     state.busy = true;
-    setStatus('가사 데이터를 불러오는 중입니다.', '');
-    render();
+    setStatus(tr('content.loading'), '');
+    scheduleThumbnailPlacement();
 
     try {
       const response = await sendMessage({
@@ -751,7 +731,7 @@
       });
 
       if (!response?.ok) {
-        throw new Error(response?.error || '가사 데이터를 불러오지 못했습니다.');
+        throw new Error(response?.error || tr('content.noCaptions'));
       }
 
       const parsed = parseCaptionPayload(response.payload, songId);
@@ -759,16 +739,16 @@
       state.lines = parsed.lines;
 
       if (state.lines.length === 0) {
-        setStatus('동기화된 캡션 라인을 찾지 못했습니다.', 'error');
+        setStatus(tr('content.noCaptions'), 'error');
       } else {
-        setStatus(`${state.lines.length}개 라인을 불러왔습니다.`, 'ok');
+        setStatus(tr('content.loaded', { count: state.lines.length }), 'ok');
       }
     } catch (error) {
       state.lines = [];
-      setStatus(error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.', 'error');
+      setStatus(localizeRuntimeError(error instanceof Error ? error.message : ''), 'error');
     } finally {
       state.busy = false;
-      render();
+      scheduleThumbnailPlacement();
     }
   }
 
@@ -943,7 +923,7 @@
       return;
     }
     downloadText(renderExport(format), makeFileName(format), mimeFor(format));
-    setStatus(`${format.toUpperCase()} 파일을 저장했습니다.`, 'ok');
+    setStatus(tr('content.saved', { format: format.toUpperCase() }), 'ok');
     incrementDownloadCount();
   }
 
@@ -968,19 +948,6 @@
       await chrome.storage.local.set(updates);
     } catch {
       // Stats are best-effort; don't surface errors to the user.
-    }
-  }
-
-  async function copyFormat(format) {
-    if (!state.lines.length || state.busy) {
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(renderExport(format));
-      setStatus(`${format.toUpperCase()} 내용을 복사했습니다.`, 'ok');
-    } catch (error) {
-      setStatus('클립보드 복사에 실패했습니다.', 'error');
     }
   }
 
@@ -1092,42 +1059,20 @@
     return output;
   }
 
-  function render() {
-    if (!root) {
+  function setStatus(message, tone, sticky) {
+    if (!els.status?.isConnected) {
       return;
     }
-
-    root.dataset.open = String(state.open);
-    root.dataset.empty = String(!state.lines.length && !state.busy);
-    els.subtitle.textContent = state.title || state.songId || 'SUNO 가사 다운로드';
-    els.summary.textContent = state.lines.length ? `${state.lines.length} lines / ${state.settings.format.toUpperCase()}` : '대기 중';
-    els.file.textContent = state.lines.length ? makeFileName(state.settings.format) : '파일명 미리보기';
-    els.preview.textContent = state.lines.length ? previewText(renderExport(state.settings.format)) : '';
-
-    for (const button of els.buttons) {
-      const action = button.dataset.action;
-      button.disabled = state.busy || (!state.lines.length && ['save-selected', 'copy-selected', 'save-all'].includes(action));
-    }
-
-    renderSettings();
-    scheduleThumbnailPlacement();
-  }
-
-  function renderSettings() {
-    if (!els.format) {
-      return;
-    }
-    els.format.value = state.settings.format;
-    els.fileName.value = state.settings.fileName;
-    els.includeMeta.checked = Boolean(state.settings.includeMeta);
-  }
-
-  function setStatus(message, tone) {
-    if (!els.status) {
-      return;
-    }
+    if (statusTimer) window.clearTimeout(statusTimer);
     els.status.textContent = message;
     els.status.dataset.tone = tone || '';
+    els.status.hidden = !message;
+    if (message && !sticky) {
+      statusTimer = window.setTimeout(() => {
+        els.status.hidden = true;
+        statusTimer = 0;
+      }, tone === 'error' ? 6500 : 3200);
+    }
   }
 
   function getSongIdFromLocation() {
@@ -1156,7 +1101,7 @@
         ? window.setTimeout(() => {
             if (settled) return;
             settled = true;
-            reject(new Error('요청 시간이 초과되었습니다.'));
+            reject(new Error(tr('content.requestTimeout')));
           }, timeoutMs)
         : 0;
       try {
@@ -1166,7 +1111,8 @@
           if (timer) window.clearTimeout(timer);
           const lastError = chrome.runtime.lastError;
           if (lastError) {
-            reject(new Error(lastError.message || '확장 프로그램 연결이 끊어졌습니다.'));
+            if (!isContextAlive()) handleDeadContext();
+            reject(new Error(lastError.message || tr('content.connectionLost')));
             return;
           }
           resolve(response);
@@ -1175,6 +1121,7 @@
         if (settled) return;
         settled = true;
         if (timer) window.clearTimeout(timer);
+        if (isContextInvalidatedError(error) || !isContextAlive()) handleDeadContext();
         reject(error);
       }
     });
@@ -1186,14 +1133,6 @@
       return result?.[STORAGE_KEY] || {};
     } catch {
       return {};
-    }
-  }
-
-  async function writeSettings(settings) {
-    try {
-      await chrome.storage.local.set({ [STORAGE_KEY]: settings });
-    } catch {
-      // Storage is a convenience layer; exports should still work without it.
     }
   }
 
@@ -1359,11 +1298,14 @@
     window.setTimeout(() => URL.revokeObjectURL(url), 250);
   }
 
-  function previewText(text) {
-    const lines = text.split('\n');
-    if (lines.length <= 34) {
-      return text;
-    }
-    return `${lines.slice(0, 34).join('\n')}\n...`;
+  if (testHooks) {
+    Object.assign(testHooks, {
+      cleanExportText,
+      formatLrcTime,
+      formatSrtTime,
+      normalizeLines,
+      slugify,
+      isContextInvalidatedError
+    });
   }
 })();

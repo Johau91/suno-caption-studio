@@ -22,48 +22,48 @@
           <p data-i18n="prefs.license.hint">이용권(1개월·1년·평생)을 구매하면 다운로드 한도 없이 무제한으로 저장할 수 있습니다. 구매 후 받은 라이선스 키를 입력해 활성화하세요.</p>
         </div>
 
-        <div class="license-status" data-role="license-status" data-state="free">
-          <span class="license-badge" data-role="license-badge">무료</span>
-          <span class="license-status-text" data-role="license-status-text">다운로드 한도가 적용됩니다.</span>
+        <div class="license-status" data-role="license-status" data-state="free" role="status" aria-live="polite">
+          <span class="license-badge" data-role="license-badge" data-i18n="prefs.license.free">무료</span>
+          <span class="license-status-text" data-role="license-status-text" data-i18n="prefs.license.statusFree">다운로드 한도가 적용됩니다.</span>
         </div>
 
         <div class="license-activate" data-role="license-activate">
-          <input type="text" class="license-input" data-role="license-input" placeholder="라이선스 키 입력 (예: XXXX-XXXX-XXXX-XXXX)" autocomplete="off" spellcheck="false">
+          <input type="text" class="license-input" data-role="license-input" data-i18n-placeholder="prefs.license.keyPlaceholder" placeholder="라이선스 키 입력 (예: XXXX-XXXX-XXXX-XXXX)" autocomplete="off" spellcheck="false">
           <button type="button" class="license-btn license-btn-primary" data-action="activate-license" data-i18n="prefs.license.activate">활성화</button>
         </div>
 
         <div class="license-actions">
-          <button type="button" class="license-btn license-btn-buy" data-action="open-checkout" data-i18n="prefs.license.subscribe">프리미엄 이용권 구매</button>
+          <button type="button" class="license-btn license-btn-buy" data-action="open-checkout" aria-expanded="false" aria-controls="license-purchase" data-i18n="prefs.license.subscribe">프리미엄 이용권 구매</button>
           <button type="button" class="license-btn license-btn-ghost" data-action="deactivate-license" data-role="license-deactivate" hidden data-i18n="prefs.license.deactivate">이 기기에서 비활성화</button>
         </div>
 
-        <div class="license-purchase" data-role="license-purchase" hidden>
-          <div class="license-tiers" role="group" aria-label="이용권 선택">
-            <button type="button" class="license-tier" data-tier="1month">
-              <span class="license-tier-name">1개월</span>
+        <div class="license-purchase" id="license-purchase" data-role="license-purchase" hidden>
+          <div class="license-tiers" role="group" aria-label="이용권 선택" data-i18n-aria-label="prefs.license.tierGroup">
+            <button type="button" class="license-tier" data-tier="1month" aria-pressed="false">
+              <span class="license-tier-name" data-i18n="prefs.license.tier.month">1개월</span>
               <span class="license-tier-price">₩2,900</span>
-              <span class="license-tier-sub">30일</span>
+              <span class="license-tier-sub" data-i18n="prefs.license.duration.month">30일</span>
             </button>
-            <button type="button" class="license-tier" data-tier="1year" data-selected="true">
-              <span class="license-tier-badge">인기</span>
-              <span class="license-tier-name">1년</span>
+            <button type="button" class="license-tier" data-tier="1year" data-selected="true" aria-pressed="true">
+              <span class="license-tier-badge" data-i18n="prefs.license.popular">인기</span>
+              <span class="license-tier-name" data-i18n="prefs.license.tier.year">1년</span>
               <span class="license-tier-price">₩9,900</span>
-              <span class="license-tier-sub">365일</span>
+              <span class="license-tier-sub" data-i18n="prefs.license.duration.year">365일</span>
             </button>
-            <button type="button" class="license-tier" data-tier="lifetime">
-              <span class="license-tier-badge">최고가치</span>
-              <span class="license-tier-name">평생</span>
+            <button type="button" class="license-tier" data-tier="lifetime" aria-pressed="false">
+              <span class="license-tier-badge" data-i18n="prefs.license.bestValue">최고가치</span>
+              <span class="license-tier-name" data-i18n="prefs.license.tier.lifetime">평생</span>
               <span class="license-tier-price">₩15,600</span>
-              <span class="license-tier-sub">영구</span>
+              <span class="license-tier-sub" data-i18n="prefs.license.duration.lifetime">영구</span>
             </button>
           </div>
-          <input type="tel" inputmode="numeric" class="license-input" data-role="buy-phone" placeholder="휴대폰 번호 (숫자만, 예: 01012345678)" autocomplete="off">
-          <input type="email" class="license-input" data-role="buy-email" placeholder="이메일 (선택 · 라이선스 키 백업 발송)" autocomplete="off">
+          <input type="tel" inputmode="numeric" class="license-input" data-role="buy-phone" aria-label="휴대폰 번호" data-i18n-aria-label="prefs.license.phoneLabel" data-i18n-placeholder="prefs.license.phonePlaceholder" placeholder="휴대폰 번호 (숫자만, 예: 01012345678)" autocomplete="tel">
+          <input type="email" class="license-input" data-role="buy-email" aria-label="이메일 (필수)" data-i18n-aria-label="prefs.license.emailLabel" data-i18n-placeholder="prefs.license.emailPlaceholder" placeholder="이메일 (필수 · 라이선스 키 발송)" autocomplete="email" required>
           <button type="button" class="license-btn license-btn-buy license-pay" data-action="start-payment" data-role="pay-btn">₩9,900 결제하기</button>
-          <p class="license-purchase-note">카드 · 카카오페이 · 네이버페이 · 1회성 결제(자동결제 없음)</p>
+          <p class="license-purchase-note" data-i18n="prefs.license.paymentNote">카드 · 카카오페이 · 네이버페이 · 1회성 결제(자동결제 없음)</p>
         </div>
 
-        <p class="license-msg" data-role="license-msg" hidden></p>
+        <p class="license-msg" data-role="license-msg" role="status" aria-live="polite" aria-atomic="true" hidden></p>
       </section>
 
       <section class="options-card">

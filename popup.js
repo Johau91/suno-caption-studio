@@ -80,6 +80,9 @@ const quotaCap_el = document.querySelector('[data-role="quota-cap"]');
 const quotaBoost = document.querySelector('[data-role="quota-boost"]');
 const quotaBarFill = document.querySelector('[data-role="quota-bar-fill"]');
 const quotaPremiumCta = document.querySelector('[data-role="quota-premium-cta"]');
+const toolsToggleButton = document.querySelector('[data-action="toggle-tools"]');
+const toolsToggleLabel = document.querySelector('[data-role="tools-toggle-label"]');
+const extraToolLinks = [...document.querySelectorAll('.tool-link-more')];
 
 let currentLang = 'ko';
 let statusTimer = 0;
@@ -135,6 +138,8 @@ async function init() {
     button.addEventListener('click', () => handleShare(button.dataset.share));
   }
 
+  sharePopover?.addEventListener('keydown', handleShareMenuKeydown);
+
   document.addEventListener('click', () => setSharePopoverOpen(false));
 
   document.addEventListener('keydown', (event) => {
@@ -161,6 +166,10 @@ async function init() {
       chrome.tabs.create({ url: chrome.runtime.getURL('options.html') });
     }
     window.close();
+  });
+
+  toolsToggleButton?.addEventListener('click', () => {
+    setToolsExpanded(toolsToggleButton.getAttribute('aria-expanded') !== 'true');
   });
 
 
@@ -329,6 +338,24 @@ function applyI18n(lang) {
     status.textContent = window.SCS_I18N.t(lang, 'status.idle');
   }
   refreshReviewPromptTitle();
+  refreshToolsToggleLabel();
+}
+
+function setToolsExpanded(expanded) {
+  if (!toolsToggleButton) return;
+  toolsToggleButton.setAttribute('aria-expanded', String(expanded));
+  for (const link of extraToolLinks) {
+    link.hidden = !expanded;
+  }
+  refreshToolsToggleLabel();
+}
+
+function refreshToolsToggleLabel() {
+  if (!toolsToggleButton || !toolsToggleLabel) return;
+  const expanded = toolsToggleButton.getAttribute('aria-expanded') === 'true';
+  const key = expanded ? 'tools.showLess' : 'tools.showAll';
+  toolsToggleLabel.dataset.i18n = key;
+  toolsToggleLabel.textContent = window.SCS_I18N.t(currentLang, key);
 }
 
 function maybeShowReviewPrompt(stats, state) {
@@ -391,10 +418,26 @@ function setSharePopoverOpen(open) {
   if (!sharePopover || !shareToggleButton) return;
   sharePopover.hidden = !open;
   shareToggleButton.setAttribute('aria-expanded', String(Boolean(open)));
+  if (open) {
+    window.requestAnimationFrame(() => shareOptionButtons[0]?.focus());
+  }
+}
+
+function handleShareMenuKeydown(event) {
+  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+  event.preventDefault();
+  const current = shareOptionButtons.indexOf(document.activeElement);
+  let next = current;
+  if (event.key === 'Home') next = 0;
+  if (event.key === 'End') next = shareOptionButtons.length - 1;
+  if (event.key === 'ArrowDown') next = current < 0 ? 0 : (current + 1) % shareOptionButtons.length;
+  if (event.key === 'ArrowUp') next = current < 0 ? shareOptionButtons.length - 1 : (current - 1 + shareOptionButtons.length) % shareOptionButtons.length;
+  shareOptionButtons[next]?.focus();
 }
 
 async function handleShare(target) {
   setSharePopoverOpen(false);
+  shareToggleButton?.focus();
   await bumpShareCount();
   const title = window.SCS_I18N.t(currentLang, 'docTitle');
   const text = window.SCS_I18N.t(currentLang, 'share.text');
